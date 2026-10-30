@@ -30,15 +30,7 @@ struct ContentView: View {
     }
 
     private var windowTitle: String {
-        guard selectedPreset != nil else {
-            return defaultAppName
-        }
-        let title = viewModel.trimmedTitle
-        if title.isEmpty {
-            return defaultAppName
-        } else {
-            return "\(title) - \(defaultAppName)"
-        }
+        defaultAppName
     }
 
     private var finishedMessage: String {
