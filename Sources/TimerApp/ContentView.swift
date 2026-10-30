@@ -128,6 +128,7 @@ struct ContentView: View {
         .onTapGesture {
             focusedIndex = nil
         }
+        .background(WindowSizeTracker())
     }
 
     private var colonView: some View {

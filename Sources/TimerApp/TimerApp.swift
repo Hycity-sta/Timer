@@ -12,6 +12,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        if let window = NSApp.windows.first(where: { $0.canBecomeKey }) {
+            WindowSizeManager.shared.saveSize(for: window)
+        }
+    }
+
     private func setupAppIcon() {
         // 1. 尝试从 SPM Bundle 资源读取计时器 AppIcon.icns
         if let iconUrl = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
@@ -44,7 +50,7 @@ struct TimerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        WindowGroup("倒计时") {
+        WindowGroup("倒计时", id: "timer-main-window") {
             ContentView()
         }
         .windowToolbarStyle(.unified)
