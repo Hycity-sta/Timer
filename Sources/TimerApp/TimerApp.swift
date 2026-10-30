@@ -2,12 +2,7 @@ import SwiftUI
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationWillFinishLaunching(_ notification: Notification) {
-        ProcessInfo.processInfo.processName = AppEnvironment.appDisplayName
-    }
-
     func applicationDidFinishLaunching(_ notification: Notification) {
-        ProcessInfo.processInfo.processName = AppEnvironment.appDisplayName
         NSApp.setActivationPolicy(.regular)
         setupAppIcon()
         NSApp.activate(ignoringOtherApps: true)
@@ -55,7 +50,7 @@ struct TimerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        WindowGroup(AppEnvironment.appDisplayName, id: AppEnvironment.windowGroupId) {
+        WindowGroup {
             ContentView()
         }
         .windowToolbarStyle(.unified)

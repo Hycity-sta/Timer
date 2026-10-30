@@ -10,12 +10,18 @@ struct ContentView: View {
         viewModel.state == .idle || viewModel.state == .finished
     }
 
+    private var defaultAppName: String {
+        (Bundle.main.localizedInfoDictionary?["CFBundleDisplayName"] as? String)
+            ?? (Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String)
+            ?? "倒计时"
+    }
+
     private var windowTitle: String {
         let title = viewModel.trimmedTitle
         if title.isEmpty {
-            return AppEnvironment.appDisplayName
+            return defaultAppName
         } else {
-            return "\(title) - \(AppEnvironment.appDisplayName)"
+            return "\(title) - \(defaultAppName)"
         }
     }
 

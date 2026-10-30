@@ -4,8 +4,9 @@ import AppKit
 final class WindowSizeManager {
     static let shared = WindowSizeManager()
 
-    private let widthKey = "TimerApp." + AppEnvironment.dataKeyPrefix + "lastWindowWidth"
-    private let heightKey = "TimerApp." + AppEnvironment.dataKeyPrefix + "lastWindowHeight"
+    private let widthKey = "TimerApp.lastWindowWidth"
+    private let heightKey = "TimerApp.lastWindowHeight"
+    private static let windowAutosaveName = "TimerMainWindow"
 
     private let minWidth: CGFloat = 420
     private let minHeight: CGFloat = 250
@@ -13,7 +14,7 @@ final class WindowSizeManager {
     private var isRestoring = false
 
     private var defaults: UserDefaults {
-        AppEnvironment.userDefaults
+        UserDefaults.standard
     }
 
     private init() {}
@@ -102,7 +103,7 @@ private final class WindowTrackingView: NSView {
         guard let window = self.window else { return }
 
         // 设置系统 Frame Autosave Name 作为辅助支持
-        _ = window.setFrameAutosaveName(AppEnvironment.windowAutosaveName)
+        _ = window.setFrameAutosaveName("TimerMainWindow")
 
         // 异步确保在 SwiftUI 首轮布局后应用保存的窗口尺寸
         if !hasRestored {

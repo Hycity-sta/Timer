@@ -17,12 +17,12 @@ final class TimerViewModel: ObservableObject {
     @Published var remainingSeconds: Int = 300
     @Published var initialTotalSeconds: Int = 300
 
-    private static let titleStorageKey = "TimerApp." + AppEnvironment.dataKeyPrefix + "customTitle"
+    private static let titleStorageKey = "TimerApp.customTitle"
 
     /// 用户自定义倒计时标题，支持通过 UserDefaults 在应用重启后保留
     @Published var title: String {
         didSet {
-            AppEnvironment.userDefaults.set(title, forKey: Self.titleStorageKey)
+            UserDefaults.standard.set(title, forKey: Self.titleStorageKey)
         }
     }
 
@@ -34,7 +34,7 @@ final class TimerViewModel: ObservableObject {
     private var timerCancellable: AnyCancellable?
 
     init() {
-        self.title = AppEnvironment.userDefaults.string(forKey: Self.titleStorageKey) ?? ""
+        self.title = UserDefaults.standard.string(forKey: Self.titleStorageKey) ?? ""
         syncDigitsToRemainingSeconds()
     }
 
