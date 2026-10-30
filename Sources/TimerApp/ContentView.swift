@@ -3,8 +3,8 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var viewModel = TimerViewModel()
     @FocusState private var focusedIndex: Int?
-    @FocusState private var isTitleFocused: Bool
-    @State private var isTitleHovered = false
+    @State private var isRenamePresented = false
+    @State private var tempTitle = ""
 
     var isEditable: Bool {
         viewModel.state == .idle || viewModel.state == .finished
@@ -38,8 +38,17 @@ struct ContentView: View {
         VStack(spacing: 16) {
             Spacer(minLength: 0)
 
-            // 倒计时标题输入区域
-            titleInputField
+            // 倒计时标题（有标题时居中展示）
+            if !viewModel.trimmedTitle.isEmpty {
+                Text(viewModel.trimmedTitle)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 4)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
 
             // 6 个格子与冒号
             VStack(spacing: 10) {
@@ -97,7 +106,6 @@ struct ContentView: View {
                 // 开始 / 暂停 / 继续
                 Button(action: {
                     focusedIndex = nil
-                    isTitleFocused = false
                     viewModel.toggleStartPause()
                 }) {
                     Text(startPauseTitle)
@@ -108,12 +116,11 @@ struct ContentView: View {
                         .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
-                .keyboardShortcut(isTitleFocused ? nil : KeyboardShortcut.defaultAction)
+                .keyboardShortcut(.defaultAction)
 
                 // 重置
                 Button(action: {
                     focusedIndex = nil
-                    isTitleFocused = false
                     viewModel.reset()
                 }) {
                     Text("重置")
@@ -130,10 +137,27 @@ struct ContentView: View {
                 .disabled(viewModel.state == .idle && viewModel.remainingSeconds == viewModel.initialTotalSeconds)
                 .opacity((viewModel.state == .idle && viewModel.remainingSeconds == viewModel.initialTotalSeconds) ? 0.4 : 1.0)
 
+                // 重命名
+                Button(action: {
+                    focusedIndex = nil
+                    tempTitle = viewModel.title
+                    isRenamePresented = true
+                }) {
+                    Text("重命名")
+                        .font(.system(size: 14, weight: .medium))
+                        .frame(minWidth: 72, minHeight: 34)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                        )
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
                 // 归零（将所有数字重置为 00:00:00）
                 Button(action: {
                     focusedIndex = nil
-                    isTitleFocused = false
                     viewModel.clearAll()
                 }) {
                     Text("归零")
@@ -157,71 +181,21 @@ struct ContentView: View {
         .frame(minWidth: 420, minHeight: 250)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle(windowTitle)
-        // 点击空白处取消格子与标题焦点
+        // 点击空白处取消格子焦点
         .contentShape(Rectangle())
         .onTapGesture {
             focusedIndex = nil
-            isTitleFocused = false
         }
         .background(WindowSizeTracker())
-        .onChange(of: isTitleFocused) { _, focused in
-            if focused {
-                focusedIndex = nil
+        .alert("重命名倒计时", isPresented: $isRenamePresented) {
+            TextField("输入倒计时标题", text: $tempTitle)
+            Button("确定") {
+                viewModel.title = tempTitle
             }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("设置倒计时标题，留空则不显示标题。")
         }
-    }
-
-    private var titleInputField: some View {
-        ZStack {
-            // 水平绝对居中的输入框
-            TextField("添加倒计时标题...", text: $viewModel.title)
-                .textFieldStyle(.plain)
-                .multilineTextAlignment(.center)
-                .font(.system(size: 15, weight: .medium))
-                .focused($isTitleFocused)
-                .padding(.horizontal, 28) // 左右留出对称内边距，确保文字严格在正中心
-                .onSubmit {
-                    isTitleFocused = false
-                }
-
-            // 右侧一键清空按钮
-            HStack {
-                Spacer()
-                if !viewModel.title.isEmpty {
-                    Button(action: {
-                        viewModel.title = ""
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary.opacity(0.6))
-                    }
-                    .buttonStyle(.plain)
-                    .help("清空标题")
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                }
-            }
-            .padding(.trailing, 8)
-        }
-        .padding(.vertical, 6)
-        .frame(maxWidth: 260)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(isTitleFocused ? 0.9 : (isTitleHovered ? 0.5 : 0.2)))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(
-                    isTitleFocused ? Color.accentColor : Color.primary.opacity(isTitleHovered ? 0.15 : 0.08),
-                    lineWidth: isTitleFocused ? 1.5 : 1
-                )
-        )
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isTitleHovered = hovering
-            }
-        }
-        .animation(.easeInOut(duration: 0.15), value: isTitleFocused)
-        .animation(.easeInOut(duration: 0.15), value: viewModel.title.isEmpty)
     }
 
     private var colonView: some View {
@@ -244,15 +218,12 @@ struct ContentView: View {
             isEditable: isEditable,
             isFocused: focusedIndex == index,
             onSelect: {
-                isTitleFocused = false
                 focusedIndex = index
             },
             onIncrement: {
-                isTitleFocused = false
                 viewModel.adjustDigit(at: index, delta: 1)
             },
             onDecrement: {
-                isTitleFocused = false
                 viewModel.adjustDigit(at: index, delta: -1)
             }
         )
