@@ -10,14 +10,18 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 24) {
-            // 顶部标题
-            HStack {
+            // 顶部栏
+            HStack(spacing: 6) {
+                Image(systemName: "timer")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.accentColor)
                 Text("倒计时")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.secondary)
                 Spacer()
                 if isEditable && viewModel.calculatedSecondsFromDigits > 0 {
                     Button("清空") {
+                        focusedIndex = nil
                         viewModel.clearAll()
                     }
                     .buttonStyle(.plain)
@@ -28,8 +32,8 @@ struct ContentView: View {
             .padding(.horizontal, 4)
 
             // 6 个格子与冒号
-            VStack(spacing: 8) {
-                HStack(alignment: .center, spacing: 8) {
+            VStack(spacing: 10) {
+                HStack(alignment: .center, spacing: 10) {
                     // 时 (2位)
                     HStack(spacing: 6) {
                         makeDigitView(index: 0)
@@ -53,22 +57,22 @@ struct ContentView: View {
                     }
                 }
 
-                // 底部标签
+                // 底部单位标签
                 HStack(spacing: 0) {
                     Text("时")
-                        .frame(width: 110)
-                    Spacer().frame(width: 20)
+                        .frame(width: 114)
+                    Spacer().frame(width: 24)
                     Text("分")
-                        .frame(width: 110)
-                    Spacer().frame(width: 20)
+                        .frame(width: 114)
+                    Spacer().frame(width: 24)
                     Text("秒")
-                        .frame(width: 110)
+                        .frame(width: 114)
                 }
-                .font(.system(size: 11, weight: .regular))
+                .font(.system(size: 12, weight: .regular))
                 .foregroundColor(.secondary)
             }
 
-            // 状态提示
+            // 倒计时完成提示
             if viewModel.state == .finished {
                 Text("⏰ 时间到！")
                     .font(.system(size: 14, weight: .medium))
@@ -78,7 +82,7 @@ struct ContentView: View {
 
             // 控制按钮区域
             HStack(spacing: 16) {
-                // 开始 / 暂停 / 继续按钮
+                // 开始 / 暂停 / 继续
                 Button(action: {
                     focusedIndex = nil
                     viewModel.toggleStartPause()
@@ -96,7 +100,7 @@ struct ContentView: View {
                 .buttonStyle(.plain)
                 .keyboardShortcut(.defaultAction)
 
-                // 重置按钮
+                // 重置
                 Button(action: {
                     focusedIndex = nil
                     viewModel.reset()
@@ -120,17 +124,22 @@ struct ContentView: View {
             }
         }
         .padding(28)
-        .frame(width: 440, height: 260)
+        .frame(width: 440, height: 250)
         .background(Color(nsColor: .windowBackgroundColor))
+        // 点击空白处取消格子焦点
+        .contentShape(Rectangle())
+        .onTapGesture {
+            focusedIndex = nil
+        }
     }
 
     private var colonView: some View {
         VStack(spacing: 6) {
             Circle()
-                .fill(Color.secondary.opacity(0.6))
+                .fill(Color.secondary.opacity(0.5))
                 .frame(width: 4, height: 4)
             Circle()
-                .fill(Color.secondary.opacity(0.6))
+                .fill(Color.secondary.opacity(0.5))
                 .frame(width: 4, height: 4)
         }
         .frame(width: 14)
@@ -138,49 +147,76 @@ struct ContentView: View {
 
     @ViewBuilder
     private func makeDigitView(index: Int) -> some View {
-        ZStack {
-            DigitBoxView(
-                index: index,
-                digit: $viewModel.digits[index],
-                isEditable: isEditable,
-                isFocused: focusedIndex == index,
-                onSelect: {
-                    focusedIndex = index
-                },
-                onIncrement: {
-                    viewModel.adjustDigit(at: index, delta: 1)
-                },
-                onDecrement: {
-                    viewModel.adjustDigit(at: index, delta: -1)
-                }
-            )
-
-            // 隐藏的 TextField，用于捕获键盘数字输入与焦点跳转
-            if isEditable {
-                TextField("", text: Binding(
-                    get: { "" },
-                    set: { val in
-                        handleKeyInput(for: index, value: val)
-                    }
-                ))
-                .focused($focusedIndex, equals: index)
-                .opacity(0.001)
-                .frame(width: 52, height: 68)
+        DigitBoxView(
+            index: index,
+            value: viewModel.digits[index],
+            isEditable: isEditable,
+            isFocused: focusedIndex == index,
+            onSelect: {
+                focusedIndex = index
+            },
+            onIncrement: {
+                viewModel.adjustDigit(at: index, delta: 1)
+            },
+            onDecrement: {
+                viewModel.adjustDigit(at: index, delta: -1)
             }
+        )
+        .focusable(isEditable)
+        .focusEffectDisabled()
+        .focused($focusedIndex, equals: index)
+        .onKeyPress { press in
+            guard isEditable else { return .ignored }
+            return handleKeyPress(press, at: index)
         }
     }
 
-    private func handleKeyInput(for index: Int, value: String) {
-        guard let lastChar = value.last, let num = Int(String(lastChar)) else {
-            return
+    private func handleKeyPress(_ press: KeyPress, at index: Int) -> KeyPress.Result {
+        // 数字键输入 0-9
+        if let char = press.characters.first, let num = Int(String(char)) {
+            viewModel.setDigit(at: index, value: num)
+            if index < 5 {
+                focusedIndex = index + 1
+            } else {
+                focusedIndex = nil
+            }
+            return .handled
         }
-        viewModel.setDigit(at: index, value: num)
-        // 自动跳转到下一个输入格
-        if index < 5 {
-            focusedIndex = index + 1
-        } else {
-            focusedIndex = nil
+
+        // 删除键 Backspace / Delete
+        if press.key == .delete {
+            if viewModel.digits[index] != 0 {
+                viewModel.setDigit(at: index, value: 0)
+            } else if index > 0 {
+                focusedIndex = index - 1
+                viewModel.setDigit(at: index - 1, value: 0)
+            }
+            return .handled
         }
+
+        // 左右箭头切换焦点
+        if press.key == .leftArrow {
+            if index > 0 {
+                focusedIndex = index - 1
+                return .handled
+            }
+        } else if press.key == .rightArrow {
+            if index < 5 {
+                focusedIndex = index + 1
+                return .handled
+            }
+        }
+
+        // 上下箭头增减数值
+        if press.key == .upArrow {
+            viewModel.adjustDigit(at: index, delta: 1)
+            return .handled
+        } else if press.key == .downArrow {
+            viewModel.adjustDigit(at: index, delta: -1)
+            return .handled
+        }
+
+        return .ignored
     }
 
     private var startPauseIconName: String {

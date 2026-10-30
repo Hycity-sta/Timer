@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "TimerApp",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .executable(
@@ -15,7 +15,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "TimerApp",
-            path: "Sources/TimerApp"
+            path: "Sources/TimerApp",
+            resources: [
+                .process("Resources")
+            ]
         )
     ]
 )

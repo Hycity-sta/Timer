@@ -2,9 +2,10 @@ import SwiftUI
 
 struct DigitBoxView: View {
     let index: Int
-    @Binding var digit: Int
+    let value: Int
     let isEditable: Bool
-    var isFocused: Bool
+    let isFocused: Bool
+
     var onSelect: () -> Void
     var onIncrement: () -> Void
     var onDecrement: () -> Void
@@ -12,60 +13,65 @@ struct DigitBoxView: View {
     @State private var isHovered = false
 
     var body: some View {
-        VStack(spacing: 4) {
-            if isEditable {
-                Button(action: onIncrement) {
-                    Image(systemName: "chevron.up")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(isHovered ? .primary : .secondary.opacity(0.6))
-                }
-                .buttonStyle(.plain)
-                .opacity(isHovered || isFocused ? 1.0 : 0.0)
-                .frame(height: 12)
-            } else {
-                Spacer().frame(height: 12)
-            }
+        ZStack {
+            // 背景卡片
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .shadow(color: Color.black.opacity(isFocused ? 0.08 : 0.04), radius: isFocused ? 6 : 2, x: 0, y: 1)
 
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(
-                                isFocused ? Color.accentColor : Color.primary.opacity(0.12),
-                                lineWidth: isFocused ? 2 : 1
-                            )
-                    )
-                    .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+            // 边框高亮
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(
+                    isFocused ? Color.accentColor : Color.primary.opacity(0.1),
+                    lineWidth: isFocused ? 2.5 : 1
+                )
 
-                Text("\(digit)")
-                    .font(.system(size: 42, weight: .medium, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(isEditable ? .primary : Color.accentColor)
-            }
-            .frame(width: 52, height: 68)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                if isEditable {
-                    onSelect()
-                }
-            }
+            // 数字显示
+            Text("\(value)")
+                .font(.system(size: 44, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundColor(isEditable ? .primary : Color.accentColor)
 
-            if isEditable {
-                Button(action: onDecrement) {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(isHovered ? .primary : .secondary.opacity(0.6))
+            // 鼠标悬停时的微调浮层按钮（小巧精致）
+            if isEditable && isHovered {
+                VStack {
+                    Button(action: onIncrement) {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 18)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    Button(action: onDecrement) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 18)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .opacity(isHovered || isFocused ? 1.0 : 0.0)
-                .frame(height: 12)
-            } else {
-                Spacer().frame(height: 12)
+                .padding(.vertical, 2)
+                .transition(.opacity)
             }
         }
+        .frame(width: 54, height: 74)
+        .contentShape(Rectangle())
         .onHover { hovering in
-            isHovered = hovering
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+        .onTapGesture {
+            if isEditable {
+                onSelect()
+            }
         }
     }
 }
