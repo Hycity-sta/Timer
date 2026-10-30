@@ -3,14 +3,37 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var viewModel = TimerViewModel()
     @FocusState private var focusedIndex: Int?
+    @FocusState private var isTitleFocused: Bool
+    @State private var isTitleHovered = false
 
     var isEditable: Bool {
         viewModel.state == .idle || viewModel.state == .finished
     }
 
+    private var windowTitle: String {
+        let title = viewModel.trimmedTitle
+        if title.isEmpty {
+            return AppEnvironment.appDisplayName
+        } else {
+            return "\(title) - \(AppEnvironment.appDisplayName)"
+        }
+    }
+
+    private var finishedMessage: String {
+        let title = viewModel.trimmedTitle
+        if title.isEmpty {
+            return "⏰ 时间到！"
+        } else {
+            return "⏰ [\(title)] 时间到！"
+        }
+    }
+
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             Spacer(minLength: 0)
+
+            // 倒计时标题输入区域
+            titleInputField
 
             // 6 个格子与冒号
             VStack(spacing: 10) {
@@ -55,10 +78,12 @@ struct ContentView: View {
 
             // 倒计时完成提示
             if viewModel.state == .finished {
-                Text("⏰ 时间到！")
-                    .font(.system(size: 14, weight: .medium))
+                Text(finishedMessage)
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.red)
-                    .transition(.opacity)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
 
             // 控制按钮区域
@@ -66,6 +91,7 @@ struct ContentView: View {
                 // 开始 / 暂停 / 继续
                 Button(action: {
                     focusedIndex = nil
+                    isTitleFocused = false
                     viewModel.toggleStartPause()
                 }) {
                     Text(startPauseTitle)
@@ -76,11 +102,12 @@ struct ContentView: View {
                         .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
-                .keyboardShortcut(.defaultAction)
+                .keyboardShortcut(isTitleFocused ? nil : KeyboardShortcut.defaultAction)
 
                 // 重置
                 Button(action: {
                     focusedIndex = nil
+                    isTitleFocused = false
                     viewModel.reset()
                 }) {
                     Text("重置")
@@ -100,6 +127,7 @@ struct ContentView: View {
                 // 归零（将所有数字重置为 00:00:00）
                 Button(action: {
                     focusedIndex = nil
+                    isTitleFocused = false
                     viewModel.clearAll()
                 }) {
                     Text("归零")
@@ -120,15 +148,71 @@ struct ContentView: View {
             Spacer(minLength: 0)
         }
         .padding(24)
-        .frame(minWidth: 420, minHeight: 220)
+        .frame(minWidth: 420, minHeight: 250)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle(AppEnvironment.appDisplayName)
-        // 点击空白处取消格子焦点
+        .navigationTitle(windowTitle)
+        // 点击空白处取消格子与标题焦点
         .contentShape(Rectangle())
         .onTapGesture {
             focusedIndex = nil
+            isTitleFocused = false
         }
         .background(WindowSizeTracker())
+        .onChange(of: isTitleFocused) { _, focused in
+            if focused {
+                focusedIndex = nil
+            }
+        }
+    }
+
+    private var titleInputField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "pencil.line")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(isTitleFocused ? .accentColor : .secondary.opacity(0.6))
+
+            TextField("添加倒计时标题...", text: $viewModel.title)
+                .textFieldStyle(.plain)
+                .font(.system(size: 15, weight: .medium))
+                .focused($isTitleFocused)
+                .onSubmit {
+                    isTitleFocused = false
+                }
+
+            if !viewModel.title.isEmpty {
+                Button(action: {
+                    viewModel.title = ""
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .help("清空标题")
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: 280)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(isTitleFocused ? 0.9 : (isTitleHovered ? 0.5 : 0.2)))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    isTitleFocused ? Color.accentColor : Color.primary.opacity(isTitleHovered ? 0.15 : 0.08),
+                    lineWidth: isTitleFocused ? 1.5 : 1
+                )
+        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isTitleHovered = hovering
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isTitleFocused)
+        .animation(.easeInOut(duration: 0.15), value: viewModel.title.isEmpty)
     }
 
     private var colonView: some View {
@@ -151,12 +235,15 @@ struct ContentView: View {
             isEditable: isEditable,
             isFocused: focusedIndex == index,
             onSelect: {
+                isTitleFocused = false
                 focusedIndex = index
             },
             onIncrement: {
+                isTitleFocused = false
                 viewModel.adjustDigit(at: index, delta: 1)
             },
             onDecrement: {
+                isTitleFocused = false
                 viewModel.adjustDigit(at: index, delta: -1)
             }
         )
