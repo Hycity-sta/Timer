@@ -4,13 +4,17 @@ import AppKit
 final class WindowSizeManager {
     static let shared = WindowSizeManager()
 
-    private let widthKey = "TimerApp.lastWindowWidth"
-    private let heightKey = "TimerApp.lastWindowHeight"
+    private let widthKey = "TimerApp." + AppEnvironment.dataKeyPrefix + "lastWindowWidth"
+    private let heightKey = "TimerApp." + AppEnvironment.dataKeyPrefix + "lastWindowHeight"
 
     private let minWidth: CGFloat = 420
     private let minHeight: CGFloat = 220
 
     private var isRestoring = false
+
+    private var defaults: UserDefaults {
+        AppEnvironment.userDefaults
+    }
 
     private init() {}
 
@@ -23,14 +27,14 @@ final class WindowSizeManager {
         let size = window.frame.size
         guard size.width >= minWidth, size.height >= minHeight else { return }
 
-        UserDefaults.standard.set(Double(size.width), forKey: widthKey)
-        UserDefaults.standard.set(Double(size.height), forKey: heightKey)
+        defaults.set(Double(size.width), forKey: widthKey)
+        defaults.set(Double(size.height), forKey: heightKey)
     }
 
     /// 恢复上一次保存的窗口大小
     func restoreSize(for window: NSWindow) {
-        let savedW = CGFloat(UserDefaults.standard.double(forKey: widthKey))
-        let savedH = CGFloat(UserDefaults.standard.double(forKey: heightKey))
+        let savedW = CGFloat(defaults.double(forKey: widthKey))
+        let savedH = CGFloat(defaults.double(forKey: heightKey))
 
         // 若没有保存过有效尺寸，则保持系统默认尺寸
         guard savedW >= minWidth, savedH >= minHeight else { return }
@@ -98,7 +102,7 @@ private final class WindowTrackingView: NSView {
         guard let window = self.window else { return }
 
         // 设置系统 Frame Autosave Name 作为辅助支持
-        _ = window.setFrameAutosaveName("TimerMainWindow")
+        _ = window.setFrameAutosaveName(AppEnvironment.windowAutosaveName)
 
         // 异步确保在 SwiftUI 首轮布局后应用保存的窗口尺寸
         if !hasRestored {

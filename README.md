@@ -4,7 +4,9 @@
 
 ## 规格与标识符规范
 
-- **Bundle Identifier**: `com.hycity.timer`（规范推荐：采用**全小写**反向域名记法）。
+- **Bundle Identifier**:
+  - Release 版：`com.hycity.timer`
+  - Debug 版：`com.hycity.timer.debug`（数据独立隔离）
 
 ## 功能特性
 
@@ -20,9 +22,18 @@
 
 ## 运行与开发
 
-### 方式 1：一键打包并运行 macOS 原生应用（推荐）
+### 方式 1：打包并运行 macOS 原生应用（推荐）
 ```bash
-./build_app.sh && open Timer.app
+# 构建 Release 版本 (输出 Timer.app)
+./build_app.sh release
+open Timer.app
+
+# 构建 Debug 版本 (输出 Timer-Debug.app，数据与 Release 完全隔离)
+./build_app.sh debug
+open Timer-Debug.app
+
+# 同时构建 Release 与 Debug 版本
+./build_app.sh all
 ```
 
 ### 方式 2：终端命令行直接运行

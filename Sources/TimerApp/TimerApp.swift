@@ -50,7 +50,7 @@ struct TimerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        WindowGroup("倒计时", id: "timer-main-window") {
+        WindowGroup(AppEnvironment.appDisplayName, id: AppEnvironment.windowGroupId) {
             ContentView()
         }
         .windowToolbarStyle(.unified)

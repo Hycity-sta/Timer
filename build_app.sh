@@ -3,33 +3,51 @@ set -e
 
 SDK_PATH="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
 
-# 1. 使用 macOS 27 SDK 编译
-echo "正在使用 macOS 27.0 SDK 构建..."
-swift build -c release \
-  -Xswiftc -target -Xswiftc arm64-apple-macos27.0 \
-  -Xswiftc -sdk -Xswiftc "$SDK_PATH"
+build_target() {
+    local MODE="$1"
 
-# 2. 组装 Timer.app
-APP_DIR="Timer.app"
-CONTENTS_DIR="$APP_DIR/Contents"
-MACOS_DIR="$CONTENTS_DIR/MacOS"
-RESOURCES_DIR="$CONTENTS_DIR/Resources"
+    if [ "$MODE" = "debug" ]; then
+        APP_DIR="Timer-Debug.app"
+        BUNDLE_ID="com.hycity.timer.debug"
+        APP_NAME="倒计时 (Debug)"
+        BUILD_CONF="debug"
+    else
+        APP_DIR="Timer.app"
+        BUNDLE_ID="com.hycity.timer"
+        APP_NAME="倒计时"
+        BUILD_CONF="release"
+    fi
 
-mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+    echo "=========================================="
+    echo "正在构建 $MODE 版本: $APP_NAME"
+    echo "Bundle ID: $BUNDLE_ID"
+    echo "目标产物: $APP_DIR"
+    echo "=========================================="
 
-# 拷贝二进制
-cp .build/release/TimerApp "$MACOS_DIR/TimerApp"
+    swift build -c "$BUILD_CONF" \
+      -Xswiftc -target -Xswiftc arm64-apple-macos27.0 \
+      -Xswiftc -sdk -Xswiftc "$SDK_PATH"
 
-# 拷贝资源
-if [ -d ".build/release/TimerApp_TimerApp.bundle" ]; then
-    cp -r ".build/release/TimerApp_TimerApp.bundle" "$RESOURCES_DIR/"
-fi
-if [ -f "Sources/TimerApp/Resources/AppIcon.icns" ]; then
-    cp "Sources/TimerApp/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
-fi
+    CONTENTS_DIR="$APP_DIR/Contents"
+    MACOS_DIR="$CONTENTS_DIR/MacOS"
+    RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
-# 写入 Info.plist (指定 LSMinimumSystemVersion 为 27.0，启用 macOS 27 Liquid Glass 特性)
-cat << 'EOF' > "$CONTENTS_DIR/Info.plist"
+    rm -rf "$APP_DIR"
+    mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+
+    # 拷贝可执行二进制
+    cp ".build/$BUILD_CONF/TimerApp" "$MACOS_DIR/TimerApp"
+
+    # 拷贝资源文件
+    if [ -d ".build/$BUILD_CONF/TimerApp_TimerApp.bundle" ]; then
+        cp -r ".build/$BUILD_CONF/TimerApp_TimerApp.bundle" "$RESOURCES_DIR/"
+    fi
+    if [ -f "Sources/TimerApp/Resources/AppIcon.icns" ]; then
+        cp "Sources/TimerApp/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
+    fi
+
+    # 写入 Info.plist
+    cat << EOF > "$CONTENTS_DIR/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -41,13 +59,13 @@ cat << 'EOF' > "$CONTENTS_DIR/Info.plist"
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.hycity.timer</string>
+    <string>$BUNDLE_ID</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>倒计时</string>
+    <string>$APP_NAME</string>
     <key>CFBundleDisplayName</key>
-    <string>倒计时</string>
+    <string>$APP_NAME</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -64,4 +82,26 @@ cat << 'EOF' > "$CONTENTS_DIR/Info.plist"
 </plist>
 EOF
 
-echo "✓ 成功构建并打包 macOS 27 原生应用: $APP_DIR"
+    echo "✓ 成功构建并打包: $APP_DIR"
+    echo ""
+}
+
+TARGET="${1:-release}"
+
+case "$TARGET" in
+    debug)
+        build_target "debug"
+        ;;
+    release)
+        build_target "release"
+        ;;
+    all)
+        build_target "release"
+        build_target "debug"
+        ;;
+    *)
+        echo "使用方法: ./build_app.sh [release|debug|all]"
+        echo "默认构建 release 版本"
+        exit 1
+        ;;
+esac

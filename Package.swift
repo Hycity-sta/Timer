@@ -18,6 +18,9 @@ let package = Package(
             path: "Sources/TimerApp",
             resources: [
                 .process("Resources")
+            ],
+            swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug))
             ]
         )
     ]

@@ -6,4 +6,5 @@ DerivedData/
 .swiftpm/
 *.xcodeproj
 *.xcworkspace
+*.app/
 Timer.app/

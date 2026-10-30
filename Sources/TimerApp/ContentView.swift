@@ -122,7 +122,7 @@ struct ContentView: View {
         .padding(24)
         .frame(minWidth: 420, minHeight: 220)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle("倒计时")
+        .navigationTitle(AppEnvironment.appDisplayName)
         // 点击空白处取消格子焦点
         .contentShape(Rectangle())
         .onTapGesture {
