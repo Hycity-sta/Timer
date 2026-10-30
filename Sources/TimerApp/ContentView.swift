@@ -172,35 +172,38 @@ struct ContentView: View {
     }
 
     private var titleInputField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "pencil.line")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(isTitleFocused ? .accentColor : .secondary.opacity(0.6))
-
+        ZStack {
+            // 水平绝对居中的输入框
             TextField("添加倒计时标题...", text: $viewModel.title)
                 .textFieldStyle(.plain)
+                .multilineTextAlignment(.center)
                 .font(.system(size: 15, weight: .medium))
                 .focused($isTitleFocused)
+                .padding(.horizontal, 28) // 左右留出对称内边距，确保文字严格在正中心
                 .onSubmit {
                     isTitleFocused = false
                 }
 
-            if !viewModel.title.isEmpty {
-                Button(action: {
-                    viewModel.title = ""
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary.opacity(0.6))
+            // 右侧一键清空按钮
+            HStack {
+                Spacer()
+                if !viewModel.title.isEmpty {
+                    Button(action: {
+                        viewModel.title = ""
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                    .help("清空标题")
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
-                .buttonStyle(.plain)
-                .help("清空标题")
-                .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
+            .padding(.trailing, 8)
         }
-        .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .frame(maxWidth: 280)
+        .frame(maxWidth: 260)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color(nsColor: .controlBackgroundColor).opacity(isTitleFocused ? 0.9 : (isTitleHovered ? 0.5 : 0.2)))
