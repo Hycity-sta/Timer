@@ -1,0 +1,32 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {},
+	"launch": {
+		"configurations": [
+			{
+				"type": "swift",
+				"request": "launch",
+				"args": [],
+				"cwd": "${workspaceFolder:Timer}",
+				"name": "Debug TimerApp (Timer)",
+				"target": "TimerApp",
+				"configuration": "debug",
+				"preLaunchTask": "swift: Build Debug TimerApp (Timer)"
+			},
+			{
+				"type": "swift",
+				"request": "launch",
+				"args": [],
+				"cwd": "${workspaceFolder:Timer}",
+				"name": "Release TimerApp (Timer)",
+				"target": "TimerApp",
+				"configuration": "release",
+				"preLaunchTask": "swift: Build Release TimerApp (Timer)"
+			}
+		]
+	}
+}
