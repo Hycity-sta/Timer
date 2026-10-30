@@ -304,7 +304,7 @@ struct ContentView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
 
-            // 6 个只读数字卡片与冒号
+            // 6 个纯净只读数字显示与冒号
             VStack(spacing: 10) {
                 HStack(alignment: .center, spacing: 10) {
                     // 时 (2位)
@@ -432,6 +432,7 @@ struct ContentView: View {
             value: viewModel.digits[index],
             isEditable: isEditable,
             isInteractive: false,
+            showsBackground: false,
             isFocused: false
         )
     }

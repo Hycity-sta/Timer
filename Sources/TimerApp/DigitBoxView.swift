@@ -5,6 +5,7 @@ struct DigitBoxView: View {
     let value: Int
     let isEditable: Bool
     var isInteractive: Bool = true
+    var showsBackground: Bool = true
     let isFocused: Bool
 
     var onSelect: () -> Void = {}
@@ -67,19 +68,21 @@ struct DigitBoxView: View {
 
             // 中间纯净数字卡片
             ZStack {
-                // 背景卡片
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-                    .shadow(
-                        color: Color.black.opacity((isInteractive && isFocused) ? 0.08 : 0.04),
-                        radius: (isInteractive && isFocused) ? 6 : 2,
-                        x: 0,
-                        y: 1
-                    )
+                if showsBackground {
+                    // 背景卡片
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                        .shadow(
+                            color: Color.black.opacity((isInteractive && isFocused) ? 0.08 : 0.04),
+                            radius: (isInteractive && isFocused) ? 6 : 2,
+                            x: 0,
+                            y: 1
+                        )
 
-                // 边框高亮
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(borderColor, lineWidth: borderWidth)
+                    // 边框高亮
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(borderColor, lineWidth: borderWidth)
+                }
 
                 // 数字显示
                 Text("\(value)")
