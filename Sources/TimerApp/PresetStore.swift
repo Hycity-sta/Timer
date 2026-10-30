@@ -24,18 +24,18 @@ struct TimerPreset: Codable, Identifiable, Hashable {
         }
     }
 
-    /// 根据时长自动生成的默认名称，如“25 分钟”“1 小时 5 分钟”“1 分钟 30 秒”
-    static func autoName(for totalSeconds: Int) -> String {
-        let total = max(0, totalSeconds)
-        let hrs = total / 3600
-        let mins = (total % 3600) / 60
-        let secs = total % 60
+    /// 未命名倒计时的默认名称
+    static let untitledName = "未命名倒计时"
 
-        var parts: [String] = []
-        if hrs > 0 { parts.append("\(hrs) 小时") }
-        if mins > 0 { parts.append("\(mins) 分钟") }
-        if secs > 0 { parts.append("\(secs) 秒") }
-        return parts.isEmpty ? "0 秒" : parts.joined(separator: " ")
+    /// 将输入名称规范化：去除首尾空白，为空时回退为「未命名倒计时」
+    static func normalizedName(_ name: String) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? untitledName : trimmed
+    }
+
+    /// 展示用名称（兼容名称为空的旧数据）
+    var displayName: String {
+        TimerPreset.normalizedName(name)
     }
 }
 
