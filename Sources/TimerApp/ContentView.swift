@@ -15,8 +15,17 @@ struct ContentView: View {
     @State private var pendingSwitchPreset: TimerPreset?
     @State private var isSwitchConfirmPresented = false
 
+    // 删除倒计时确认弹窗
+    @State private var pendingDeletePreset: TimerPreset?
+    @State private var isDeleteConfirmPresented = false
+
     var isEditable: Bool {
         viewModel.state == .idle || viewModel.state == .finished
+    }
+
+    /// 当前倒计时是否已开始（运行中或已暂停）
+    private var isCountdownActive: Bool {
+        viewModel.state == .running || viewModel.state == .paused
     }
 
     private var selectedPreset: TimerPreset? {
@@ -80,6 +89,21 @@ struct ContentView: View {
                 cancelPendingSwitch()
             }
         }
+        .alert(deleteConfirmTitle, isPresented: $isDeleteConfirmPresented) {
+            Button("删除", role: .destructive) {
+                confirmPendingDelete()
+            }
+            Button("取消", role: .cancel) {
+                cancelPendingDelete()
+            }
+        } message: {
+            if let pending = pendingDeletePreset,
+               pending.id == selectedPresetID && isCountdownActive {
+                Text("当前倒计时正在进行中，删除后将停止计时且无法恢复。")
+            } else {
+                Text("删除后将无法恢复。")
+            }
+        }
     }
 
     // MARK: - 侧边栏
@@ -93,9 +117,10 @@ struct ContentView: View {
                         Button("编辑") {
                             beginEdit(presetID: preset.id)
                         }
+                        .disabled(preset.id == selectedPresetID && isCountdownActive)
                         Divider()
                         Button("删除", role: .destructive) {
-                            deletePreset(id: preset.id)
+                            requestDeletePreset(preset)
                         }
                     }
             }
@@ -109,8 +134,8 @@ struct ContentView: View {
         }
         .onDeleteCommand {
             guard activeEditorMode == nil else { return }
-            if let id = selectedPresetID {
-                deletePreset(id: id)
+            if let id = selectedPresetID, let preset = presetStore.preset(id: id) {
+                requestDeletePreset(preset)
             }
         }
         .overlay {
@@ -201,6 +226,10 @@ struct ContentView: View {
 
     private func beginEdit(presetID: UUID?) {
         guard let preset = presetStore.preset(id: presetID) else { return }
+        // 倒计时已开始（运行中或已暂停）时不允许编辑当前倒计时
+        if preset.id == selectedPresetID && isCountdownActive {
+            return
+        }
         activeEditorMode = .edit(preset)
     }
 
@@ -238,6 +267,26 @@ struct ContentView: View {
 
     private func cancelPendingSwitch() {
         pendingSwitchPreset = nil
+    }
+
+    private var deleteConfirmTitle: String {
+        "确定要删除倒计时「\(pendingDeletePreset?.displayName ?? "")」吗？"
+    }
+
+    private func requestDeletePreset(_ preset: TimerPreset) {
+        pendingDeletePreset = preset
+        isDeleteConfirmPresented = true
+    }
+
+    private func confirmPendingDelete() {
+        if let preset = pendingDeletePreset {
+            deletePreset(id: preset.id)
+        }
+        pendingDeletePreset = nil
+    }
+
+    private func cancelPendingDelete() {
+        pendingDeletePreset = nil
     }
 
     /// 删除倒计时项；若删除的是当前选中项，则先停止计时并清空选中回到空界面
@@ -403,11 +452,13 @@ struct ContentView: View {
                         .background(Color(nsColor: .controlBackgroundColor))
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                                .stroke(Color.primary.opacity(isCountdownActive ? 0.06 : 0.12), lineWidth: 1)
                         )
                         .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
+                .disabled(isCountdownActive)
+                .opacity(isCountdownActive ? 0.4 : 1.0)
             }
 
             Spacer(minLength: 0)
