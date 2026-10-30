@@ -46,7 +46,7 @@ build_target() {
         cp "Sources/TimerApp/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
     fi
 
-    # 写入 Info.plist
+    # 写入 Info.plist (增加 LSHasLocalizedDisplayName 与 CFBundleLocalizations 确保系统 Dock 和 Finder 正确识别中文名称)
     cat << EOF > "$CONTENTS_DIR/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -54,6 +54,17 @@ build_target() {
 <dict>
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>zh-Hans</string>
+        <string>zh_CN</string>
+    </array>
+    <key>LSHasLocalizedDisplayName</key>
+    <true/>
+    <key>CFBundleDisplayName</key>
+    <string>$APP_NAME</string>
+    <key>CFBundleName</key>
+    <string>$APP_NAME</string>
     <key>CFBundleExecutable</key>
     <string>TimerApp</string>
     <key>CFBundleIconFile</key>
@@ -62,10 +73,6 @@ build_target() {
     <string>$BUNDLE_ID</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>$APP_NAME</string>
-    <key>CFBundleDisplayName</key>
-    <string>$APP_NAME</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -82,7 +89,21 @@ build_target() {
 </plist>
 EOF
 
-    echo "✓ 成功构建并打包: $APP_DIR"
+    # 写入本地化语言包 (zh-Hans 与 zh_CN)
+    mkdir -p "$RESOURCES_DIR/zh-Hans.lproj" "$RESOURCES_DIR/zh_CN.lproj"
+    cat << EOF > "$RESOURCES_DIR/zh-Hans.lproj/InfoPlist.strings"
+/* Localized versions of Info.plist keys */
+"CFBundleDisplayName" = "$APP_NAME";
+"CFBundleName" = "$APP_NAME";
+EOF
+    cp "$RESOURCES_DIR/zh-Hans.lproj/InfoPlist.strings" "$RESOURCES_DIR/zh_CN.lproj/InfoPlist.strings"
+
+    # 强制刷新系统 LaunchServices 注册信息
+    if [ -x "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" ]; then
+        /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_DIR" || true
+    fi
+
+    echo "✓ 成功构建并打包: $APP_DIR (显示名称: $APP_NAME)"
     echo ""
 }
 

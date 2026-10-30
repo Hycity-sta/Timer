@@ -2,7 +2,12 @@ import SwiftUI
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        ProcessInfo.processInfo.processName = AppEnvironment.appDisplayName
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        ProcessInfo.processInfo.processName = AppEnvironment.appDisplayName
         NSApp.setActivationPolicy(.regular)
         setupAppIcon()
         NSApp.activate(ignoringOtherApps: true)
