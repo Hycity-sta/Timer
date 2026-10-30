@@ -50,57 +50,28 @@ build_target() {
         cp "Sources/TimerApp/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
     fi
 
-    # 写入 Info.plist (增加 LSHasLocalizedDisplayName 与 CFBundleLocalizations 确保系统 Dock 和 Finder 正确识别中文名称)
-    cat << EOF > "$CONTENTS_DIR/Info.plist"
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>zh_CN</string>
-    <key>CFBundleLocalizations</key>
-    <array>
-        <string>zh-Hans</string>
-        <string>zh_CN</string>
-    </array>
-    <key>LSHasLocalizedDisplayName</key>
-    <true/>
-    <key>CFBundleDisplayName</key>
-    <string>$APP_NAME</string>
-    <key>CFBundleName</key>
-    <string>$APP_NAME</string>
-    <key>CFBundleExecutable</key>
-    <string>TimerApp</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundleIdentifier</key>
-    <string>$BUNDLE_ID</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>27.0</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-    <key>NSRequiresAquaSystemAppearance</key>
-    <false/>
-</dict>
-</plist>
-EOF
+    # 拷贝并动态配置基准 Info.plist
+    cp "Sources/TimerApp/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
+    plutil -replace CFBundleIdentifier -string "$BUNDLE_ID" "$CONTENTS_DIR/Info.plist"
+    plutil -replace CFBundleDisplayName -string "$APP_NAME" "$CONTENTS_DIR/Info.plist"
+    plutil -replace CFBundleName -string "$APP_NAME" "$CONTENTS_DIR/Info.plist"
 
-    # 写入本地化语言包 (zh-Hans 与 zh_CN)
-    mkdir -p "$RESOURCES_DIR/zh-Hans.lproj" "$RESOURCES_DIR/zh_CN.lproj"
-    cat << EOF > "$RESOURCES_DIR/zh-Hans.lproj/InfoPlist.strings"
-/* Localized versions of Info.plist keys */
-"CFBundleDisplayName" = "$APP_NAME";
-"CFBundleName" = "$APP_NAME";
-EOF
-    cp "$RESOURCES_DIR/zh-Hans.lproj/InfoPlist.strings" "$RESOURCES_DIR/zh_CN.lproj/InfoPlist.strings"
+    # 拷贝本地化语言包 (.lproj)
+    for lproj in Sources/TimerApp/Resources/*.lproj; do
+        if [ -d "$lproj" ]; then
+            cp -r "$lproj" "$RESOURCES_DIR/"
+        fi
+    done
+
+    # 若为 Debug 环境，更新多语言名称
+    if [ "$MODE" = "debug" ]; then
+        for str_file in "$RESOURCES_DIR"/*.lproj/InfoPlist.strings; do
+            if [ -f "$str_file" ]; then
+                sed -i '' "s/\"CFBundleDisplayName\" = \".*\";/\"CFBundleDisplayName\" = \"$APP_NAME\";/g" "$str_file"
+                sed -i '' "s/\"CFBundleName\" = \".*\";/\"CFBundleName\" = \"$APP_NAME\";/g" "$str_file"
+            fi
+        done
+    fi
 
     # 强制刷新系统 LaunchServices 注册信息
     if [ -x "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" ]; then

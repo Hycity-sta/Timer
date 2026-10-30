@@ -16,8 +16,13 @@ let package = Package(
         .executableTarget(
             name: "TimerApp",
             path: "Sources/TimerApp",
+            exclude: [
+                "Resources/Info.plist",
+                "Resources/zh-Hans.lproj",
+                "Resources/zh_CN.lproj"
+            ],
             resources: [
-                .process("Resources")
+                .process("Resources/AppIcon.icns")
             ],
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))
