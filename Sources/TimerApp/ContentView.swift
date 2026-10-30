@@ -122,13 +122,7 @@ struct ContentView: View {
         .padding(24)
         .frame(minWidth: 420, minHeight: 220)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("倒计时")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
-            }
-        }
+        .navigationTitle("倒计时")
         // 点击空白处取消格子焦点
         .contentShape(Rectangle())
         .onTapGesture {

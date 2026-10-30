@@ -44,10 +44,8 @@ struct TimerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        WindowGroup {
-            NavigationStack {
-                ContentView()
-            }
+        WindowGroup("倒计时") {
+            ContentView()
         }
         .windowToolbarStyle(.unified)
     }
