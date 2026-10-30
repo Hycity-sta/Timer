@@ -19,15 +19,6 @@ struct ContentView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.secondary)
                 Spacer()
-                if isEditable && viewModel.calculatedSecondsFromDigits > 0 {
-                    Button("清空") {
-                        focusedIndex = nil
-                        viewModel.clearAll()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-                }
             }
             .padding(.horizontal, 4)
 
@@ -81,7 +72,7 @@ struct ContentView: View {
             }
 
             // 控制按钮区域
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 // 开始 / 暂停 / 继续
                 Button(action: {
                     focusedIndex = nil
@@ -121,6 +112,28 @@ struct ContentView: View {
                 .buttonStyle(.plain)
                 .disabled(viewModel.state == .idle && viewModel.remainingSeconds == viewModel.initialTotalSeconds)
                 .opacity((viewModel.state == .idle && viewModel.remainingSeconds == viewModel.initialTotalSeconds) ? 0.4 : 1.0)
+
+                // 清空（放置在重置右侧，带背景和边框）
+                Button(action: {
+                    focusedIndex = nil
+                    viewModel.clearAll()
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trash")
+                        Text("清空")
+                    }
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(minWidth: 80, minHeight: 36)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                    )
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+                .disabled(!isEditable || viewModel.calculatedSecondsFromDigits == 0)
+                .opacity((!isEditable || viewModel.calculatedSecondsFromDigits == 0) ? 0.4 : 1.0)
             }
         }
         .padding(28)
