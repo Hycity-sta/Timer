@@ -12,9 +12,9 @@
     <key>LSHasLocalizedDisplayName</key>
     <true/>
     <key>CFBundleDisplayName</key>
-    <string>倒计时</string>
+    <string>Timer</string>
     <key>CFBundleName</key>
-    <string>倒计时</string>
+    <string>Timer</string>
     <key>CFBundleExecutable</key>
     <string>TimerApp</string>
     <key>CFBundleIconFile</key>

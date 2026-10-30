@@ -12,18 +12,20 @@ build_target() {
 
     if [ "$MODE" = "debug" ]; then
         BUNDLE_ID="com.hycity.timer.debug"
-        APP_NAME="倒计时 (Debug)"
+        BASE_NAME="Timer-Debug"
+        LOCALIZED_NAME="倒计时 (Debug)"
+        APP_DIR="$DIST_DIR/Timer-Debug.app"
         BUILD_CONF="debug"
     else
         BUNDLE_ID="com.hycity.timer"
-        APP_NAME="倒计时"
+        BASE_NAME="Timer"
+        LOCALIZED_NAME="倒计时"
+        APP_DIR="$DIST_DIR/Timer.app"
         BUILD_CONF="release"
     fi
 
-    APP_DIR="$DIST_DIR/$APP_NAME.app"
-
-    # 清理旧英文名称产物以避免 LaunchServices 缓存混淆
-    for old_app in "$DIST_DIR/Timer.app" "$DIST_DIR/Timer-Debug.app"; do
+    # 清理旧中文名称产物以避免 LaunchServices 缓存混淆
+    for old_app in "$DIST_DIR/倒计时.app" "$DIST_DIR/倒计时 (Debug).app"; do
         if [ -d "$old_app" ]; then
             if [ -x "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" ]; then
                 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$old_app" 2>/dev/null || true
@@ -33,9 +35,9 @@ build_target() {
     done
 
     echo "=========================================="
-    echo "正在构建 $MODE 版本: $APP_NAME"
+    echo "正在构建 $MODE 版本: $LOCALIZED_NAME"
     echo "Bundle ID: $BUNDLE_ID"
-    echo "目标产物: $APP_DIR"
+    echo "目标产物: $APP_DIR (基准名: $BASE_NAME)"
     echo "=========================================="
 
     swift build -c "$BUILD_CONF" \
@@ -60,11 +62,11 @@ build_target() {
         cp "Sources/TimerApp/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
     fi
 
-    # 拷贝并动态配置基准 Info.plist
+    # 拷贝并动态配置基准 Info.plist（基准名与磁盘文件名保持一致，消除 wasRenamed 误判）
     cp "Sources/TimerApp/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
     plutil -replace CFBundleIdentifier -string "$BUNDLE_ID" "$CONTENTS_DIR/Info.plist"
-    plutil -replace CFBundleDisplayName -string "$APP_NAME" "$CONTENTS_DIR/Info.plist"
-    plutil -replace CFBundleName -string "$APP_NAME" "$CONTENTS_DIR/Info.plist"
+    plutil -replace CFBundleDisplayName -string "$BASE_NAME" "$CONTENTS_DIR/Info.plist"
+    plutil -replace CFBundleName -string "$BASE_NAME" "$CONTENTS_DIR/Info.plist"
 
     # 拷贝本地化语言包 (.lproj)
     for lproj in Sources/TimerApp/Resources/*.lproj; do
@@ -73,14 +75,18 @@ build_target() {
         fi
     done
 
-    # 若为 Debug 环境，更新多语言名称
+    # 若为 Debug 环境，更新各语言包显示名称
     if [ "$MODE" = "debug" ]; then
-        for str_file in "$RESOURCES_DIR"/*.lproj/InfoPlist.strings; do
+        for str_file in "$RESOURCES_DIR"/*zh*.lproj/InfoPlist.strings; do
             if [ -f "$str_file" ]; then
-                sed -i '' "s/\"CFBundleDisplayName\" = \".*\";/\"CFBundleDisplayName\" = \"$APP_NAME\";/g" "$str_file"
-                sed -i '' "s/\"CFBundleName\" = \".*\";/\"CFBundleName\" = \"$APP_NAME\";/g" "$str_file"
+                sed -i '' "s/\"CFBundleDisplayName\" = \".*\";/\"CFBundleDisplayName\" = \"$LOCALIZED_NAME\";/g" "$str_file"
+                sed -i '' "s/\"CFBundleName\" = \".*\";/\"CFBundleName\" = \"$LOCALIZED_NAME\";/g" "$str_file"
             fi
         done
+        if [ -f "$RESOURCES_DIR/en.lproj/InfoPlist.strings" ]; then
+            sed -i '' "s/\"CFBundleDisplayName\" = \".*\";/\"CFBundleDisplayName\" = \"Timer (Debug)\";/g" "$RESOURCES_DIR/en.lproj/InfoPlist.strings"
+            sed -i '' "s/\"CFBundleName\" = \".*\";/\"CFBundleName\" = \"Timer (Debug)\";/g" "$RESOURCES_DIR/en.lproj/InfoPlist.strings"
+        fi
     fi
 
     # 强制刷新系统 LaunchServices 注册信息
@@ -88,7 +94,7 @@ build_target() {
         /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_DIR" || true
     fi
 
-    echo "✓ 成功构建并打包: $APP_DIR (显示名称: $APP_NAME)"
+    echo "✓ 成功构建并打包: $APP_DIR (显示名称: $LOCALIZED_NAME)"
     echo ""
 }
 

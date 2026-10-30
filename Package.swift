@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "TimerApp",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v14)
     ],
@@ -19,7 +20,8 @@ let package = Package(
             exclude: [
                 "Resources/Info.plist",
                 "Resources/zh-Hans.lproj",
-                "Resources/zh_CN.lproj"
+                "Resources/zh_CN.lproj",
+                "Resources/en.lproj"
             ],
             resources: [
                 .process("Resources/AppIcon.icns")
