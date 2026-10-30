@@ -2,12 +2,35 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = TimerViewModel()
+    @StateObject private var presetStore = PresetStore()
     @FocusState private var focusedIndex: Int?
+
+    // 重命名弹窗：renameTargetID 为 nil 时仅修改当前临时标题，否则重命名对应预设
     @State private var isRenamePresented = false
+    @State private var renameTargetID: UUID?
     @State private var tempTitle = ""
+
+    // 侧边栏选中项及「运行中加载预设」确认弹窗
+    @State private var selectedPresetID: UUID?
+    @State private var pendingPreset: TimerPreset?
+    @State private var selectionBeforePending: UUID?
+    @State private var isLoadConfirmPresented = false
 
     var isEditable: Bool {
         viewModel.state == .idle || viewModel.state == .finished
+    }
+
+    /// 当前设定的倒计时时长（运行中、暂停、结束时均为本次设定的总时长）
+    private var currentDurationSeconds: Int {
+        viewModel.initialTotalSeconds
+    }
+
+    private var canSavePreset: Bool {
+        currentDurationSeconds > 0
+    }
+
+    private var selectedPreset: TimerPreset? {
+        presetStore.preset(id: selectedPresetID)
     }
 
     private var defaultAppName: String {
@@ -35,6 +58,224 @@ struct ContentView: View {
     }
 
     var body: some View {
+        NavigationSplitView {
+            sidebar
+                .navigationSplitViewColumnWidth(min: 170, ideal: 200, max: 300)
+        } detail: {
+            timerDetail
+        }
+        .frame(minWidth: 600, minHeight: 250)
+        .navigationTitle(windowTitle)
+        .background(WindowSizeTracker())
+        .focusedSceneValue(\.savePresetAction, canSavePreset ? { saveCurrentAsPreset() } : nil)
+        .alert(renameAlertTitle, isPresented: $isRenamePresented) {
+            TextField(renameTargetID == nil ? "输入倒计时标题" : "输入预设名称", text: $tempTitle)
+            Button("确定") {
+                commitRename()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text(renameTargetID == nil
+                 ? "设置倒计时标题，留空则不显示标题。"
+                 : "设置预设名称，留空则按时长自动命名。")
+        }
+        .alert(loadConfirmTitle, isPresented: $isLoadConfirmPresented) {
+            Button("停止并加载") {
+                confirmPendingLoad()
+            }
+            Button("取消", role: .cancel) {
+                cancelPendingLoad()
+            }
+        }
+    }
+
+    // MARK: - 侧边栏
+
+    private var sidebar: some View {
+        List(selection: sidebarSelection) {
+            ForEach(presetStore.presets) { preset in
+                presetRow(preset)
+                    .tag(preset.id)
+                    .contextMenu {
+                        Button("重命名") {
+                            beginRename(presetID: preset.id)
+                        }
+                        Button("用当前时长覆盖") {
+                            presetStore.updateDuration(id: preset.id, totalSeconds: currentDurationSeconds)
+                        }
+                        .disabled(!canSavePreset)
+                        Divider()
+                        Button("删除", role: .destructive) {
+                            deletePreset(id: preset.id)
+                        }
+                    }
+            }
+            .onMove { source, destination in
+                presetStore.move(fromOffsets: source, toOffset: destination)
+            }
+        }
+        .listStyle(.sidebar)
+        .onDeleteCommand {
+            if let id = selectedPresetID {
+                deletePreset(id: id)
+            }
+        }
+        .overlay {
+            if presetStore.presets.isEmpty {
+                VStack(spacing: 6) {
+                    Text("暂无预设")
+                        .font(.system(size: 13, weight: .medium))
+                    Text("点击 ＋ 保存当前倒计时")
+                        .font(.system(size: 12))
+                }
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 12)
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            HStack(spacing: 4) {
+                Button(action: saveCurrentAsPreset) {
+                    Image(systemName: "plus")
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .help("将当前倒计时保存为预设 (⌘S)")
+                .disabled(!canSavePreset)
+
+                Button(action: {
+                    if let id = selectedPresetID {
+                        deletePreset(id: id)
+                    }
+                }) {
+                    Image(systemName: "minus")
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .help("删除选中的预设")
+                .disabled(selectedPresetID == nil)
+
+                Spacer()
+            }
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+        }
+    }
+
+    private func presetRow(_ preset: TimerPreset) -> some View {
+        HStack(spacing: 8) {
+            Text(preset.name)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 4)
+            Text(preset.durationText)
+                .font(.system(size: 12))
+                .monospacedDigit()
+                .foregroundColor(.secondary)
+        }
+    }
+
+    /// 侧边栏选中绑定：仅在用户点击时触发加载逻辑，代码内部直接修改 selectedPresetID 不会触发
+    private var sidebarSelection: Binding<UUID?> {
+        Binding(
+            get: { selectedPresetID },
+            set: { newID in handleUserSelection(newID) }
+        )
+    }
+
+    private func handleUserSelection(_ newID: UUID?) {
+        guard newID != selectedPresetID else { return }
+        let previousID = selectedPresetID
+        selectedPresetID = newID
+
+        guard let preset = presetStore.preset(id: newID) else { return }
+        focusedIndex = nil
+
+        if viewModel.state == .running || viewModel.state == .paused {
+            pendingPreset = preset
+            selectionBeforePending = previousID
+            isLoadConfirmPresented = true
+        } else {
+            viewModel.load(totalSeconds: preset.totalSeconds, title: preset.name)
+        }
+    }
+
+    private var loadConfirmTitle: String {
+        "是否停止当前倒计时并加载「\(pendingPreset?.name ?? "")」？"
+    }
+
+    private func confirmPendingLoad() {
+        if let preset = pendingPreset {
+            viewModel.load(totalSeconds: preset.totalSeconds, title: preset.name)
+            selectedPresetID = preset.id
+        }
+        pendingPreset = nil
+        selectionBeforePending = nil
+    }
+
+    private func cancelPendingLoad() {
+        selectedPresetID = selectionBeforePending
+        pendingPreset = nil
+        selectionBeforePending = nil
+    }
+
+    // MARK: - 预设操作
+
+    /// 用当前时长新建预设：名称取当前标题，标题为空时按时长自动命名，新建后自动选中
+    private func saveCurrentAsPreset() {
+        let seconds = currentDurationSeconds
+        guard seconds > 0 else {
+            NSSound.beep()
+            return
+        }
+        let title = viewModel.trimmedTitle
+        let name = title.isEmpty ? TimerPreset.autoName(for: seconds) : title
+        let preset = presetStore.add(name: name, totalSeconds: seconds)
+        selectedPresetID = preset.id
+        viewModel.title = name
+    }
+
+    /// 删除预设；若删除的是当前选中项，则保持当前时长并取消选中
+    private func deletePreset(id: UUID) {
+        if selectedPresetID == id {
+            selectedPresetID = nil
+        }
+        presetStore.delete(id: id)
+    }
+
+    private func beginRename(presetID: UUID?) {
+        focusedIndex = nil
+        if let preset = presetStore.preset(id: presetID) {
+            renameTargetID = preset.id
+            tempTitle = preset.name
+        } else {
+            renameTargetID = nil
+            tempTitle = viewModel.title
+        }
+        isRenamePresented = true
+    }
+
+    private var renameAlertTitle: String {
+        renameTargetID == nil ? "重命名倒计时" : "重命名预设"
+    }
+
+    private func commitRename() {
+        if let id = renameTargetID, let preset = presetStore.preset(id: id) {
+            let trimmed = tempTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = trimmed.isEmpty ? TimerPreset.autoName(for: preset.totalSeconds) : trimmed
+            presetStore.rename(id: id, to: name)
+            if id == selectedPresetID {
+                viewModel.title = name
+            }
+        } else {
+            viewModel.title = tempTitle
+        }
+    }
+
+    // MARK: - 计时器主界面
+
+    private var timerDetail: some View {
         VStack(spacing: 16) {
             Spacer(minLength: 0)
 
@@ -137,11 +378,9 @@ struct ContentView: View {
                 .disabled(viewModel.state == .idle && viewModel.remainingSeconds == viewModel.initialTotalSeconds)
                 .opacity((viewModel.state == .idle && viewModel.remainingSeconds == viewModel.initialTotalSeconds) ? 0.4 : 1.0)
 
-                // 重命名
+                // 重命名（选中预设时重命名该预设，否则仅修改当前临时标题）
                 Button(action: {
-                    focusedIndex = nil
-                    tempTitle = viewModel.title
-                    isRenamePresented = true
+                    beginRename(presetID: selectedPresetID)
                 }) {
                     Text("重命名")
                         .font(.system(size: 14, weight: .medium))
@@ -180,21 +419,10 @@ struct ContentView: View {
         .padding(24)
         .frame(minWidth: 420, minHeight: 250)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle(windowTitle)
         // 点击空白处取消格子焦点
         .contentShape(Rectangle())
         .onTapGesture {
             focusedIndex = nil
-        }
-        .background(WindowSizeTracker())
-        .alert("重命名倒计时", isPresented: $isRenamePresented) {
-            TextField("输入倒计时标题", text: $tempTitle)
-            Button("确定") {
-                viewModel.title = tempTitle
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("设置倒计时标题，留空则不显示标题。")
         }
     }
 

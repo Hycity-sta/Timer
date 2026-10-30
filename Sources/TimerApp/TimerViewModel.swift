@@ -12,19 +12,19 @@ enum TimerState {
 @MainActor
 final class TimerViewModel: ObservableObject {
     // 6 个数字依次为：时十位, 时个位, 分十位, 分个位, 秒十位, 秒个位
-    @Published var digits: [Int] = [0, 0, 0, 5, 0, 0] // 默认 00:05:00
+    @Published var digits: [Int] = [0, 0, 0, 0, 0, 0] // 启动时为空界面 00:00:00
     @Published var state: TimerState = .idle
-    @Published var remainingSeconds: Int = 300
-    @Published var initialTotalSeconds: Int = 300
+    @Published var remainingSeconds: Int = 0
+    @Published var initialTotalSeconds: Int = 0
 
-    private static let titleStorageKey = "TimerApp.customTitle"
+    /// 6 格数字可表示的最大时长 99:59:59
+    static let maxTotalSeconds = 99 * 3600 + 59 * 60 + 59
 
-    /// 用户自定义倒计时标题，支持通过 UserDefaults 在应用重启后保留
-    @Published var title: String {
-        didSet {
-            UserDefaults.standard.set(title, forKey: Self.titleStorageKey)
-        }
-    }
+    /// 旧版本用于持久化标题的 key，现已废弃，仅用于启动时清理
+    private static let legacyTitleStorageKey = "TimerApp.customTitle"
+
+    /// 当前倒计时标题（不跨重启保留；加载预设时使用预设名称）
+    @Published var title: String = ""
 
     /// 去除首尾空白字符的标题
     var trimmedTitle: String {
@@ -34,7 +34,7 @@ final class TimerViewModel: ObservableObject {
     private var timerCancellable: AnyCancellable?
 
     init() {
-        self.title = UserDefaults.standard.string(forKey: Self.titleStorageKey) ?? ""
+        UserDefaults.standard.removeObject(forKey: Self.legacyTitleStorageKey)
         syncDigitsToRemainingSeconds()
     }
 
@@ -145,6 +145,18 @@ final class TimerViewModel: ObservableObject {
         remainingSeconds = initialTotalSeconds
         syncDigitsFromRemainingSeconds()
         state = .idle
+    }
+
+    /// 加载指定时长与标题（如来自预设）：停止当前计时并进入 idle 状态
+    func load(totalSeconds: Int, title: String) {
+        timerCancellable?.cancel()
+        timerCancellable = nil
+        let clamped = max(0, min(Self.maxTotalSeconds, totalSeconds))
+        initialTotalSeconds = clamped
+        remainingSeconds = clamped
+        syncDigitsFromRemainingSeconds()
+        state = .idle
+        self.title = title
     }
 
     /// 清空为 0

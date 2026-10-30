@@ -50,9 +50,41 @@ struct TimerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        WindowGroup {
+        // 单窗口应用：使用 Window 而非 WindowGroup，禁止 ⌘N 多开
+        Window("倒计时", id: "main") {
             ContentView()
         }
         .windowToolbarStyle(.unified)
+        .commands {
+            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .saveItem) {
+                SavePresetCommand()
+            }
+        }
+    }
+}
+
+/// 「文件 > 保存为预设」菜单项（⌘S）
+private struct SavePresetCommand: View {
+    @FocusedValue(\.savePresetAction) private var savePresetAction
+
+    var body: some View {
+        Button("保存为预设") {
+            savePresetAction?()
+        }
+        .keyboardShortcut("s", modifiers: .command)
+        .disabled(savePresetAction == nil)
+    }
+}
+
+/// 由 ContentView 提供的「保存当前倒计时为预设」动作
+struct SavePresetActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+extension FocusedValues {
+    var savePresetAction: (() -> Void)? {
+        get { self[SavePresetActionKey.self] }
+        set { self[SavePresetActionKey.self] = newValue }
     }
 }

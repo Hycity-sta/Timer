@@ -8,7 +8,7 @@ final class WindowSizeManager {
     private let heightKey = "TimerApp.lastWindowHeight"
     private static let windowAutosaveName = "TimerMainWindow"
 
-    private let minWidth: CGFloat = 420
+    private let minWidth: CGFloat = 600
     private let minHeight: CGFloat = 250
 
     private var isRestoring = false
