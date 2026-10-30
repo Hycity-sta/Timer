@@ -11,16 +11,26 @@ build_target() {
     mkdir -p "$DIST_DIR"
 
     if [ "$MODE" = "debug" ]; then
-        APP_DIR="$DIST_DIR/Timer-Debug.app"
         BUNDLE_ID="com.hycity.timer.debug"
         APP_NAME="倒计时 (Debug)"
         BUILD_CONF="debug"
     else
-        APP_DIR="$DIST_DIR/Timer.app"
         BUNDLE_ID="com.hycity.timer"
         APP_NAME="倒计时"
         BUILD_CONF="release"
     fi
+
+    APP_DIR="$DIST_DIR/$APP_NAME.app"
+
+    # 清理旧英文名称产物以避免 LaunchServices 缓存混淆
+    for old_app in "$DIST_DIR/Timer.app" "$DIST_DIR/Timer-Debug.app"; do
+        if [ -d "$old_app" ]; then
+            if [ -x "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" ]; then
+                /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$old_app" 2>/dev/null || true
+            fi
+            rm -rf "$old_app"
+        fi
+    done
 
     echo "=========================================="
     echo "正在构建 $MODE 版本: $APP_NAME"
