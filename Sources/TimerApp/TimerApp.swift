@@ -45,9 +45,10 @@ struct TimerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            NavigationStack {
+                ContentView()
+            }
         }
-        .windowResizability(.contentSize)
-        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified)
     }
 }

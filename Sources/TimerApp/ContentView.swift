@@ -9,18 +9,8 @@ struct ContentView: View {
     }
 
     var body: some View {
-        VStack(spacing: 24) {
-            // 顶部栏
-            HStack(spacing: 6) {
-                Image(systemName: "timer")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.accentColor)
-                Text("倒计时")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
-            .padding(.horizontal, 4)
+        VStack(spacing: 20) {
+            Spacer(minLength: 0)
 
             // 6 个格子与冒号
             VStack(spacing: 10) {
@@ -78,15 +68,12 @@ struct ContentView: View {
                     focusedIndex = nil
                     viewModel.toggleStartPause()
                 }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: startPauseIconName)
-                        Text(startPauseTitle)
-                    }
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(minWidth: 100, minHeight: 36)
-                    .background(startPauseButtonColor)
-                    .cornerRadius(8)
+                    Text(startPauseTitle)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(minWidth: 92, minHeight: 34)
+                        .background(startPauseButtonColor)
+                        .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.defaultAction)
@@ -96,49 +83,52 @@ struct ContentView: View {
                     focusedIndex = nil
                     viewModel.reset()
                 }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.counterclockwise")
-                        Text("重置")
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                    .frame(minWidth: 80, minHeight: 36)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                    )
-                    .cornerRadius(8)
+                    Text("重置")
+                        .font(.system(size: 14, weight: .medium))
+                        .frame(minWidth: 72, minHeight: 34)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                        )
+                        .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.state == .idle && viewModel.remainingSeconds == viewModel.initialTotalSeconds)
                 .opacity((viewModel.state == .idle && viewModel.remainingSeconds == viewModel.initialTotalSeconds) ? 0.4 : 1.0)
 
-                // 清空（放置在重置右侧，带背景和边框）
+                // 归零（将所有数字重置为 00:00:00）
                 Button(action: {
                     focusedIndex = nil
                     viewModel.clearAll()
                 }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trash")
-                        Text("清空")
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                    .frame(minWidth: 80, minHeight: 36)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                    )
-                    .cornerRadius(8)
+                    Text("归零")
+                        .font(.system(size: 14, weight: .medium))
+                        .frame(minWidth: 72, minHeight: 34)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                        )
+                        .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
                 .disabled(!isEditable || viewModel.calculatedSecondsFromDigits == 0)
                 .opacity((!isEditable || viewModel.calculatedSecondsFromDigits == 0) ? 0.4 : 1.0)
             }
+
+            Spacer(minLength: 0)
         }
-        .padding(28)
-        .frame(width: 440, height: 250)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .padding(24)
+        .frame(minWidth: 420, minHeight: 220)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("倒计时")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.primary)
+            }
+        }
         // 点击空白处取消格子焦点
         .contentShape(Rectangle())
         .onTapGesture {
@@ -230,17 +220,6 @@ struct ContentView: View {
         }
 
         return .ignored
-    }
-
-    private var startPauseIconName: String {
-        switch viewModel.state {
-        case .running:
-            return "pause.fill"
-        case .paused:
-            return "play.fill"
-        case .idle, .finished:
-            return "play.fill"
-        }
     }
 
     private var startPauseTitle: String {
