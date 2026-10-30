@@ -3,16 +3,20 @@ set -e
 
 SDK_PATH="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
 
+DIST_DIR="dist"
+
 build_target() {
     local MODE="$1"
 
+    mkdir -p "$DIST_DIR"
+
     if [ "$MODE" = "debug" ]; then
-        APP_DIR="Timer-Debug.app"
+        APP_DIR="$DIST_DIR/Timer-Debug.app"
         BUNDLE_ID="com.hycity.timer.debug"
         APP_NAME="倒计时 (Debug)"
         BUILD_CONF="debug"
     else
-        APP_DIR="Timer.app"
+        APP_DIR="$DIST_DIR/Timer.app"
         BUNDLE_ID="com.hycity.timer"
         APP_NAME="倒计时"
         BUILD_CONF="release"

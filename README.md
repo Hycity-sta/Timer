@@ -24,13 +24,13 @@
 
 ### 方式 1：打包并运行 macOS 原生应用（推荐）
 ```bash
-# 构建 Release 版本 (输出 Timer.app)
+# 构建 Release 版本 (输出 dist/Timer.app)
 ./build_app.sh release
-open Timer.app
+open dist/Timer.app
 
-# 构建 Debug 版本 (输出 Timer-Debug.app，数据与 Release 完全隔离)
+# 构建 Debug 版本 (输出 dist/Timer-Debug.app，数据与 Release 完全隔离)
 ./build_app.sh debug
-open Timer-Debug.app
+open dist/Timer-Debug.app
 
 # 同时构建 Release 与 Debug 版本
 ./build_app.sh all

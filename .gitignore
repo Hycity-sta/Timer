@@ -8,3 +8,4 @@ DerivedData/
 *.xcworkspace
 *.app/
 Timer.app/
+dist/
