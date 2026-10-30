@@ -1,32 +1,27 @@
 import SwiftUI
 
 struct ContentView: View {
+    private enum PendingInterruptAction {
+        case select(TimerPreset)
+        case createNew
+    }
+
     @StateObject private var viewModel = TimerViewModel()
     @StateObject private var presetStore = PresetStore()
     @FocusState private var focusedIndex: Int?
 
-    // 重命名弹窗：renameTargetID 为 nil 时仅修改当前临时标题，否则重命名对应预设
+    // 重命名弹窗
     @State private var isRenamePresented = false
     @State private var renameTargetID: UUID?
     @State private var tempTitle = ""
 
-    // 侧边栏选中项及「运行中加载预设」确认弹窗
+    // 侧边栏选中项及「运行中切换/新建倒计时」确认弹窗
     @State private var selectedPresetID: UUID?
-    @State private var pendingPreset: TimerPreset?
-    @State private var selectionBeforePending: UUID?
-    @State private var isLoadConfirmPresented = false
+    @State private var pendingInterruptAction: PendingInterruptAction?
+    @State private var isInterruptConfirmPresented = false
 
     var isEditable: Bool {
         viewModel.state == .idle || viewModel.state == .finished
-    }
-
-    /// 当前设定的倒计时时长（运行中、暂停、结束时均为本次设定的总时长）
-    private var currentDurationSeconds: Int {
-        viewModel.initialTotalSeconds
-    }
-
-    private var canSavePreset: Bool {
-        currentDurationSeconds > 0
     }
 
     private var selectedPreset: TimerPreset? {
@@ -40,6 +35,9 @@ struct ContentView: View {
     }
 
     private var windowTitle: String {
+        guard selectedPreset != nil else {
+            return defaultAppName
+        }
         let title = viewModel.trimmedTitle
         if title.isEmpty {
             return defaultAppName
@@ -62,29 +60,36 @@ struct ContentView: View {
             sidebar
                 .navigationSplitViewColumnWidth(min: 170, ideal: 200, max: 300)
         } detail: {
-            timerDetail
+            if selectedPreset != nil {
+                timerDetail
+            } else {
+                emptyDetailView
+            }
         }
-        .frame(minWidth: 660, minHeight: 250)
+        .frame(minWidth: 600, minHeight: 250)
         .navigationTitle(windowTitle)
         .background(WindowSizeTracker())
-        .focusedSceneValue(\.savePresetAction, canSavePreset ? { saveCurrentAsPreset() } : nil)
-        .alert(renameAlertTitle, isPresented: $isRenamePresented) {
-            TextField(renameTargetID == nil ? "输入倒计时标题" : "输入预设名称", text: $tempTitle)
+        .focusedSceneValue(\.newTimerAction, { requestCreateCountdown() })
+        .onChange(of: viewModel.initialTotalSeconds) { _, newSeconds in
+            if let id = selectedPresetID {
+                presetStore.updateDuration(id: id, totalSeconds: newSeconds)
+            }
+        }
+        .alert("重命名倒计时", isPresented: $isRenamePresented) {
+            TextField("输入倒计时名称", text: $tempTitle)
             Button("确定") {
                 commitRename()
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text(renameTargetID == nil
-                 ? "设置倒计时标题，留空则不显示标题。"
-                 : "设置预设名称，留空则显示为「未命名倒计时」。")
+            Text("设置倒计时名称，留空则显示为「未命名倒计时」。")
         }
-        .alert(loadConfirmTitle, isPresented: $isLoadConfirmPresented) {
-            Button("停止并加载") {
-                confirmPendingLoad()
+        .alert(interruptConfirmTitle, isPresented: $isInterruptConfirmPresented) {
+            Button(interruptConfirmButtonTitle) {
+                confirmPendingInterrupt()
             }
             Button("取消", role: .cancel) {
-                cancelPendingLoad()
+                cancelPendingInterrupt()
             }
         }
     }
@@ -100,10 +105,6 @@ struct ContentView: View {
                         Button("重命名") {
                             beginRename(presetID: preset.id)
                         }
-                        Button("用当前时长覆盖") {
-                            presetStore.updateDuration(id: preset.id, totalSeconds: currentDurationSeconds)
-                        }
-                        .disabled(!canSavePreset)
                         Divider()
                         Button("删除", role: .destructive) {
                             deletePreset(id: preset.id)
@@ -115,6 +116,9 @@ struct ContentView: View {
             }
         }
         .listStyle(.sidebar)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            sidebarHeader
+        }
         .onDeleteCommand {
             if let id = selectedPresetID {
                 deletePreset(id: id)
@@ -123,15 +127,47 @@ struct ContentView: View {
         .overlay {
             if presetStore.presets.isEmpty {
                 VStack(spacing: 6) {
-                    Text("暂无预设")
+                    Text("暂无倒计时")
                         .font(.system(size: 13, weight: .medium))
-                    Text("点击右侧「保存」按钮保存当前倒计时")
+                    Text("点击上方「新建倒计时」创建")
                         .font(.system(size: 12))
                 }
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 12)
             }
+        }
+    }
+
+    private var sidebarHeader: some View {
+        VStack(spacing: 0) {
+            Button(action: requestCreateCountdown) {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("新建倒计时")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .foregroundColor(.accentColor)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(Color.accentColor.opacity(0.12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7)
+                        .strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 7))
+            }
+            .buttonStyle(.plain)
+            .help("新建倒计时 (⌘N)")
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+
+            Divider()
+                .opacity(0.6)
         }
     }
 
@@ -148,7 +184,7 @@ struct ContentView: View {
         }
     }
 
-    /// 侧边栏选中绑定：仅在用户点击时触发加载逻辑，代码内部直接修改 selectedPresetID 不会触发
+    /// 侧边栏选中绑定：仅在用户点击具体项时触发切换逻辑
     private var sidebarSelection: Binding<UUID?> {
         Binding(
             get: { selectedPresetID },
@@ -157,91 +193,142 @@ struct ContentView: View {
     }
 
     private func handleUserSelection(_ newID: UUID?) {
-        guard newID != selectedPresetID else { return }
-        let previousID = selectedPresetID
-        selectedPresetID = newID
-
-        guard let preset = presetStore.preset(id: newID) else { return }
+        guard let newID, newID != selectedPresetID,
+              let preset = presetStore.preset(id: newID) else { return }
         focusedIndex = nil
 
         if viewModel.state == .running || viewModel.state == .paused {
-            pendingPreset = preset
-            selectionBeforePending = previousID
-            isLoadConfirmPresented = true
+            pendingInterruptAction = .select(preset)
+            isInterruptConfirmPresented = true
         } else {
-            viewModel.load(totalSeconds: preset.totalSeconds, title: preset.displayName)
+            loadPreset(preset)
         }
     }
 
-    private var loadConfirmTitle: String {
-        "是否停止当前倒计时并加载「\(pendingPreset?.displayName ?? "")」？"
-    }
+    // MARK: - 倒计时项管理（新建 / 加载 / 删除 / 重命名）
 
-    private func confirmPendingLoad() {
-        if let preset = pendingPreset {
-            viewModel.load(totalSeconds: preset.totalSeconds, title: preset.displayName)
-            selectedPresetID = preset.id
-        }
-        pendingPreset = nil
-        selectionBeforePending = nil
-    }
-
-    private func cancelPendingLoad() {
-        selectedPresetID = selectionBeforePending
-        pendingPreset = nil
-        selectionBeforePending = nil
-    }
-
-    // MARK: - 预设操作
-
-    /// 用当前时长新建预设：名称取当前标题，标题为空时命名为「未命名倒计时」，新建后自动选中
-    private func saveCurrentAsPreset() {
-        let seconds = currentDurationSeconds
-        guard seconds > 0 else {
-            NSSound.beep()
-            return
-        }
+    private func requestCreateCountdown() {
         focusedIndex = nil
-        let name = TimerPreset.normalizedName(viewModel.title)
-        let preset = presetStore.add(name: name, totalSeconds: seconds)
-        selectedPresetID = preset.id
-        viewModel.title = name
+        if viewModel.state == .running || viewModel.state == .paused {
+            pendingInterruptAction = .createNew
+            isInterruptConfirmPresented = true
+        } else {
+            performCreateCountdown()
+        }
     }
 
-    /// 删除预设；若删除的是当前选中项，则保持当前时长并取消选中
+    private func performCreateCountdown() {
+        let preset = presetStore.add(name: TimerPreset.untitledName, totalSeconds: 0)
+        loadPreset(preset)
+    }
+
+    private func loadPreset(_ preset: TimerPreset) {
+        focusedIndex = nil
+        selectedPresetID = preset.id
+        viewModel.load(totalSeconds: preset.totalSeconds, title: preset.displayName)
+    }
+
+    private var interruptConfirmTitle: String {
+        switch pendingInterruptAction {
+        case .select(let preset):
+            return "是否停止当前倒计时并切换到「\(preset.displayName)」？"
+        case .createNew, .none:
+            return "是否停止当前倒计时并新建？"
+        }
+    }
+
+    private var interruptConfirmButtonTitle: String {
+        switch pendingInterruptAction {
+        case .select:
+            return "停止并切换"
+        case .createNew, .none:
+            return "停止并新建"
+        }
+    }
+
+    private func confirmPendingInterrupt() {
+        guard let action = pendingInterruptAction else { return }
+        pendingInterruptAction = nil
+        switch action {
+        case .select(let preset):
+            if let latest = presetStore.preset(id: preset.id) {
+                loadPreset(latest)
+            }
+        case .createNew:
+            performCreateCountdown()
+        }
+    }
+
+    private func cancelPendingInterrupt() {
+        pendingInterruptAction = nil
+    }
+
+    /// 删除倒计时项；若删除的是当前选中项，则先停止计时并清空选中回到空界面
     private func deletePreset(id: UUID) {
         if selectedPresetID == id {
             selectedPresetID = nil
+            focusedIndex = nil
+            viewModel.load(totalSeconds: 0, title: "")
+        }
+        if case .select(let pending) = pendingInterruptAction, pending.id == id {
+            pendingInterruptAction = nil
+            isInterruptConfirmPresented = false
         }
         presetStore.delete(id: id)
     }
 
     private func beginRename(presetID: UUID?) {
         focusedIndex = nil
-        if let preset = presetStore.preset(id: presetID) {
-            renameTargetID = preset.id
-            tempTitle = preset.displayName
-        } else {
-            renameTargetID = nil
-            tempTitle = viewModel.title
-        }
+        guard let preset = presetStore.preset(id: presetID) else { return }
+        renameTargetID = preset.id
+        tempTitle = preset.displayName
         isRenamePresented = true
     }
 
-    private var renameAlertTitle: String {
-        renameTargetID == nil ? "重命名倒计时" : "重命名预设"
+    private func commitRename() {
+        guard let id = renameTargetID, presetStore.preset(id: id) != nil else { return }
+        let name = TimerPreset.normalizedName(tempTitle)
+        presetStore.rename(id: id, to: name)
+        if id == selectedPresetID {
+            viewModel.title = name
+        }
     }
 
-    private func commitRename() {
-        if let id = renameTargetID, presetStore.preset(id: id) != nil {
-            let name = TimerPreset.normalizedName(tempTitle)
-            presetStore.rename(id: id, to: name)
-            if id == selectedPresetID {
-                viewModel.title = name
+    // MARK: - 未选中空界面
+
+    private var emptyDetailView: some View {
+        VStack(spacing: 14) {
+            Spacer(minLength: 0)
+
+            Image(systemName: "timer")
+                .font(.system(size: 40, weight: .light))
+                .foregroundColor(.secondary.opacity(0.65))
+
+            Text("请在左侧选择或新建一个倒计时")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.secondary)
+
+            Button(action: requestCreateCountdown) {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("新建倒计时")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.accentColor)
+                .cornerRadius(8)
             }
-        } else {
-            viewModel.title = tempTitle
+            .buttonStyle(.plain)
+            .padding(.top, 2)
+
+            Spacer(minLength: 0)
         }
+        .padding(24)
+        .frame(minWidth: 420, minHeight: 250)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - 计时器主界面
@@ -349,7 +436,7 @@ struct ContentView: View {
                 .disabled(viewModel.state == .idle && viewModel.remainingSeconds == viewModel.initialTotalSeconds)
                 .opacity((viewModel.state == .idle && viewModel.remainingSeconds == viewModel.initialTotalSeconds) ? 0.4 : 1.0)
 
-                // 重命名（选中预设时重命名该预设，否则仅修改当前临时标题）
+                // 重命名当前选中的倒计时
                 Button(action: {
                     beginRename(presetID: selectedPresetID)
                 }) {
@@ -364,23 +451,6 @@ struct ContentView: View {
                         .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
-
-                // 保存（将当前倒计时保存为预设）
-                Button(action: saveCurrentAsPreset) {
-                    Text("保存")
-                        .font(.system(size: 14, weight: .medium))
-                        .frame(minWidth: 72, minHeight: 34)
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                        )
-                        .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-                .help("将当前倒计时保存为预设 (⌘S)")
-                .disabled(!canSavePreset)
-                .opacity(canSavePreset ? 1.0 : 0.4)
 
                 // 归零（将所有数字重置为 00:00:00）
                 Button(action: {
@@ -405,7 +475,7 @@ struct ContentView: View {
             Spacer(minLength: 0)
         }
         .padding(24)
-        .frame(minWidth: 480, minHeight: 250)
+        .frame(minWidth: 420, minHeight: 250)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // 点击空白处取消格子焦点
         .contentShape(Rectangle())

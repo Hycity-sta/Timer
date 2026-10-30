@@ -56,35 +56,35 @@ struct TimerApp: App {
         }
         .windowToolbarStyle(.unified)
         .commands {
-            CommandGroup(replacing: .newItem) {}
-            CommandGroup(replacing: .saveItem) {
-                SavePresetCommand()
+            CommandGroup(replacing: .newItem) {
+                NewTimerCommand()
             }
+            CommandGroup(replacing: .saveItem) {}
         }
     }
 }
 
-/// 「文件 > 保存为预设」菜单项（⌘S）
-private struct SavePresetCommand: View {
-    @FocusedValue(\.savePresetAction) private var savePresetAction
+/// 「文件 > 新建倒计时」菜单项（⌘N）
+private struct NewTimerCommand: View {
+    @FocusedValue(\.newTimerAction) private var newTimerAction
 
     var body: some View {
-        Button("保存为预设") {
-            savePresetAction?()
+        Button("新建倒计时") {
+            newTimerAction?()
         }
-        .keyboardShortcut("s", modifiers: .command)
-        .disabled(savePresetAction == nil)
+        .keyboardShortcut("n", modifiers: .command)
+        .disabled(newTimerAction == nil)
     }
 }
 
-/// 由 ContentView 提供的「保存当前倒计时为预设」动作
-struct SavePresetActionKey: FocusedValueKey {
+/// 由 ContentView 提供的「新建倒计时」动作
+struct NewTimerActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
 extension FocusedValues {
-    var savePresetAction: (() -> Void)? {
-        get { self[SavePresetActionKey.self] }
-        set { self[SavePresetActionKey.self] = newValue }
+    var newTimerAction: (() -> Void)? {
+        get { self[NewTimerActionKey.self] }
+        set { self[NewTimerActionKey.self] = newValue }
     }
 }
