@@ -74,6 +74,15 @@ final class PresetStore: ObservableObject {
         return preset
     }
 
+    func update(id: UUID, name: String, totalSeconds: Int) {
+        guard let index = presets.firstIndex(where: { $0.id == id }) else { return }
+        var updated = presets[index]
+        updated.name = name
+        updated.totalSeconds = totalSeconds
+        guard updated != presets[index] else { return }
+        presets[index] = updated
+    }
+
     func rename(id: UUID, to name: String) {
         guard let index = presets.firstIndex(where: { $0.id == id }),
               presets[index].name != name else { return }

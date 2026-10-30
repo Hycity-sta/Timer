@@ -4,16 +4,17 @@ struct DigitBoxView: View {
     let index: Int
     let value: Int
     let isEditable: Bool
+    var isInteractive: Bool = true
     let isFocused: Bool
 
-    var onSelect: () -> Void
-    var onIncrement: () -> Void
-    var onDecrement: () -> Void
+    var onSelect: () -> Void = {}
+    var onIncrement: () -> Void = {}
+    var onDecrement: () -> Void = {}
 
     @State private var isHovered = false
 
     private var isHighlighted: Bool {
-        isHovered || isFocused
+        isInteractive && (isHovered || isFocused)
     }
 
     private var chevronColor: Color {
@@ -27,44 +28,58 @@ struct DigitBoxView: View {
     }
 
     private var borderColor: Color {
-        if isFocused {
+        if isInteractive && isFocused {
             return .accentColor
-        } else if isHovered && isEditable {
+        } else if isInteractive && isHovered && isEditable {
             return .primary.opacity(0.22)
         } else {
             return .primary.opacity(0.1)
         }
     }
 
+    private var borderWidth: CGFloat {
+        if isInteractive && isFocused {
+            return 2.5
+        } else if isInteractive && isHovered && isEditable {
+            return 1.5
+        } else {
+            return 1
+        }
+    }
+
     var body: some View {
         VStack(spacing: 4) {
-            // 上方微调按钮（卡片外部）
-            Button(action: onIncrement) {
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(chevronColor)
-                    .frame(width: 50, height: 16)
-                    .contentShape(Rectangle())
+            if isInteractive {
+                // 上方微调按钮（卡片外部）
+                Button(action: onIncrement) {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(chevronColor)
+                        .frame(width: 50, height: 16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!isEditable)
+                .opacity(isEditable ? (isHighlighted ? 1.0 : 0.25) : 0.0)
+                .animation(.easeInOut(duration: 0.15), value: isHighlighted)
+                .animation(.easeInOut(duration: 0.15), value: isFocused)
             }
-            .buttonStyle(.plain)
-            .disabled(!isEditable)
-            .opacity(isEditable ? (isHighlighted ? 1.0 : 0.25) : 0.0)
-            .animation(.easeInOut(duration: 0.15), value: isHighlighted)
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
 
             // 中间纯净数字卡片
             ZStack {
                 // 背景卡片
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color(nsColor: .controlBackgroundColor))
-                    .shadow(color: Color.black.opacity(isFocused ? 0.08 : 0.04), radius: isFocused ? 6 : 2, x: 0, y: 1)
+                    .shadow(
+                        color: Color.black.opacity((isInteractive && isFocused) ? 0.08 : 0.04),
+                        radius: (isInteractive && isFocused) ? 6 : 2,
+                        x: 0,
+                        y: 1
+                    )
 
                 // 边框高亮
                 RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(
-                        borderColor,
-                        lineWidth: isFocused ? 2.5 : (isHovered && isEditable ? 1.5 : 1)
-                    )
+                    .strokeBorder(borderColor, lineWidth: borderWidth)
 
                 // 数字显示
                 Text("\(value)")
@@ -75,33 +90,37 @@ struct DigitBoxView: View {
             .frame(width: 54, height: 68)
             .contentShape(Rectangle())
             .onTapGesture {
-                if isEditable {
+                if isInteractive && isEditable {
                     onSelect()
                 }
             }
 
-            // 下方微调按钮（卡片外部）
-            Button(action: onDecrement) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(chevronColor)
-                    .frame(width: 50, height: 16)
-                    .contentShape(Rectangle())
+            if isInteractive {
+                // 下方微调按钮（卡片外部）
+                Button(action: onDecrement) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(chevronColor)
+                        .frame(width: 50, height: 16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!isEditable)
+                .opacity(isEditable ? (isHighlighted ? 1.0 : 0.25) : 0.0)
+                .animation(.easeInOut(duration: 0.15), value: isHighlighted)
+                .animation(.easeInOut(duration: 0.15), value: isFocused)
             }
-            .buttonStyle(.plain)
-            .disabled(!isEditable)
-            .opacity(isEditable ? (isHighlighted ? 1.0 : 0.25) : 0.0)
-            .animation(.easeInOut(duration: 0.15), value: isHighlighted)
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            if isEditable {
+            if isInteractive && isEditable {
                 onSelect()
             }
         }
         .onHover { hovering in
-            isHovered = hovering
+            if isInteractive {
+                isHovered = hovering
+            }
         }
     }
 }

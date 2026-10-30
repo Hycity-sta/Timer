@@ -2,34 +2,21 @@ import SwiftUI
 import AppKit
 
 struct ContentView: View {
-    private enum PendingInterruptAction {
-        case select(TimerPreset)
-        case createNew
-    }
-
     @StateObject private var viewModel = TimerViewModel()
     @StateObject private var presetStore = PresetStore()
 
-    // 当前聚焦的数字格索引（0~5），使用 @State 避免 NavigationSplitView 侧边栏刷新时丢失 @FocusState
-    @State private var focusedIndex: Int?
-    @State private var focusRequestToken: Int = 0
-
-    // 重命名弹窗
-    @State private var isRenamePresented = false
-    @State private var renameTargetID: UUID?
-    @State private var tempTitle = ""
-
-    // 侧边栏选中项及「运行中切换/新建倒计时」确认弹窗
+    // 侧边栏选中项
     @State private var selectedPresetID: UUID?
-    @State private var pendingInterruptAction: PendingInterruptAction?
-    @State private var isInterruptConfirmPresented = false
+
+    // 新建 / 编辑倒计时弹窗状态
+    @State private var activeEditorMode: TimerEditorMode?
+
+    // 运行中切换倒计时确认弹窗
+    @State private var pendingSwitchPreset: TimerPreset?
+    @State private var isSwitchConfirmPresented = false
 
     var isEditable: Bool {
         viewModel.state == .idle || viewModel.state == .finished
-    }
-
-    private var isDigitFocusActive: Bool {
-        focusedIndex != nil && isEditable && !isRenamePresented && !isInterruptConfirmPresented
     }
 
     private var selectedPreset: TimerPreset? {
@@ -78,31 +65,23 @@ struct ContentView: View {
         .navigationTitle(windowTitle)
         .background(WindowSizeTracker())
         .focusedSceneValue(\.newTimerAction, { requestCreateCountdown() })
-        .onChange(of: viewModel.initialTotalSeconds) { _, newSeconds in
-            if let id = selectedPresetID {
-                presetStore.updateDuration(id: id, totalSeconds: newSeconds)
-            }
+        .sheet(item: $activeEditorMode) { mode in
+            TimerEditorSheet(
+                mode: mode,
+                onConfirm: { name, totalSeconds in
+                    commitEditor(mode: mode, name: name, totalSeconds: totalSeconds)
+                },
+                onCancel: {
+                    activeEditorMode = nil
+                }
+            )
         }
-        .onChange(of: isEditable) { _, editable in
-            if !editable {
-                focusedIndex = nil
-            }
-        }
-        .alert("重命名倒计时", isPresented: $isRenamePresented) {
-            TextField("输入倒计时名称", text: $tempTitle)
-            Button("确定") {
-                commitRename()
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("设置倒计时名称，留空则显示为「未命名倒计时」。")
-        }
-        .alert(interruptConfirmTitle, isPresented: $isInterruptConfirmPresented) {
-            Button(interruptConfirmButtonTitle) {
-                confirmPendingInterrupt()
+        .alert(switchConfirmTitle, isPresented: $isSwitchConfirmPresented) {
+            Button("停止并切换") {
+                confirmPendingSwitch()
             }
             Button("取消", role: .cancel) {
-                cancelPendingInterrupt()
+                cancelPendingSwitch()
             }
         }
     }
@@ -115,8 +94,8 @@ struct ContentView: View {
                 presetRow(preset)
                     .tag(preset.id)
                     .contextMenu {
-                        Button("重命名") {
-                            beginRename(presetID: preset.id)
+                        Button("编辑") {
+                            beginEdit(presetID: preset.id)
                         }
                         Divider()
                         Button("删除", role: .destructive) {
@@ -133,7 +112,7 @@ struct ContentView: View {
             sidebarHeader
         }
         .onDeleteCommand {
-            guard focusedIndex == nil else { return }
+            guard activeEditorMode == nil else { return }
             if let id = selectedPresetID {
                 deletePreset(id: id)
             }
@@ -207,105 +186,75 @@ struct ContentView: View {
     }
 
     private func handleUserSelection(_ newID: UUID?) {
-        focusedIndex = nil
         guard let newID, newID != selectedPresetID,
               let preset = presetStore.preset(id: newID) else { return }
 
         if viewModel.state == .running || viewModel.state == .paused {
-            pendingInterruptAction = .select(preset)
-            isInterruptConfirmPresented = true
+            pendingSwitchPreset = preset
+            isSwitchConfirmPresented = true
         } else {
             loadPreset(preset)
         }
     }
 
-    // MARK: - 倒计时项管理（新建 / 加载 / 删除 / 重命名）
+    // MARK: - 倒计时项管理（新建 / 编辑 / 加载 / 删除）
 
     private func requestCreateCountdown() {
-        focusedIndex = nil
-        if viewModel.state == .running || viewModel.state == .paused {
-            pendingInterruptAction = .createNew
-            isInterruptConfirmPresented = true
-        } else {
-            performCreateCountdown()
-        }
+        activeEditorMode = .create
     }
 
-    private func performCreateCountdown() {
-        let preset = presetStore.add(name: TimerPreset.untitledName, totalSeconds: 0)
-        loadPreset(preset)
+    private func beginEdit(presetID: UUID?) {
+        guard let preset = presetStore.preset(id: presetID) else { return }
+        activeEditorMode = .edit(preset)
+    }
+
+    private func commitEditor(mode: TimerEditorMode, name: String, totalSeconds: Int) {
+        let normalizedName = TimerPreset.normalizedName(name)
+        switch mode {
+        case .create:
+            let preset = presetStore.add(name: normalizedName, totalSeconds: totalSeconds)
+            loadPreset(preset)
+        case .edit(let preset):
+            presetStore.update(id: preset.id, name: normalizedName, totalSeconds: totalSeconds)
+            if selectedPresetID == preset.id {
+                viewModel.load(totalSeconds: totalSeconds, title: normalizedName)
+            }
+        }
+        activeEditorMode = nil
     }
 
     private func loadPreset(_ preset: TimerPreset) {
-        focusedIndex = nil
         selectedPresetID = preset.id
         viewModel.load(totalSeconds: preset.totalSeconds, title: preset.displayName)
     }
 
-    private var interruptConfirmTitle: String {
-        switch pendingInterruptAction {
-        case .select(let preset):
-            return "是否停止当前倒计时并切换到「\(preset.displayName)」？"
-        case .createNew, .none:
-            return "是否停止当前倒计时并新建？"
-        }
+    private var switchConfirmTitle: String {
+        "是否停止当前倒计时并切换到「\(pendingSwitchPreset?.displayName ?? "")」？"
     }
 
-    private var interruptConfirmButtonTitle: String {
-        switch pendingInterruptAction {
-        case .select:
-            return "停止并切换"
-        case .createNew, .none:
-            return "停止并新建"
+    private func confirmPendingSwitch() {
+        if let pending = pendingSwitchPreset,
+           let latest = presetStore.preset(id: pending.id) {
+            loadPreset(latest)
         }
+        pendingSwitchPreset = nil
     }
 
-    private func confirmPendingInterrupt() {
-        guard let action = pendingInterruptAction else { return }
-        pendingInterruptAction = nil
-        switch action {
-        case .select(let preset):
-            if let latest = presetStore.preset(id: preset.id) {
-                loadPreset(latest)
-            }
-        case .createNew:
-            performCreateCountdown()
-        }
-    }
-
-    private func cancelPendingInterrupt() {
-        pendingInterruptAction = nil
+    private func cancelPendingSwitch() {
+        pendingSwitchPreset = nil
     }
 
     /// 删除倒计时项；若删除的是当前选中项，则先停止计时并清空选中回到空界面
     private func deletePreset(id: UUID) {
         if selectedPresetID == id {
             selectedPresetID = nil
-            focusedIndex = nil
             viewModel.load(totalSeconds: 0, title: "")
         }
-        if case .select(let pending) = pendingInterruptAction, pending.id == id {
-            pendingInterruptAction = nil
-            isInterruptConfirmPresented = false
+        if pendingSwitchPreset?.id == id {
+            pendingSwitchPreset = nil
+            isSwitchConfirmPresented = false
         }
         presetStore.delete(id: id)
-    }
-
-    private func beginRename(presetID: UUID?) {
-        focusedIndex = nil
-        guard let preset = presetStore.preset(id: presetID) else { return }
-        renameTargetID = preset.id
-        tempTitle = preset.displayName
-        isRenamePresented = true
-    }
-
-    private func commitRename() {
-        guard let id = renameTargetID, presetStore.preset(id: id) != nil else { return }
-        let name = TimerPreset.normalizedName(tempTitle)
-        presetStore.rename(id: id, to: name)
-        if id == selectedPresetID {
-            viewModel.title = name
-        }
     }
 
     // MARK: - 未选中空界面
@@ -345,10 +294,10 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - 计时器主界面
+    // MARK: - 计时器主界面（纯只读展示 + 运行控制）
 
     private var timerDetail: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 18) {
             Spacer(minLength: 0)
 
             // 倒计时标题（有标题时居中展示）
@@ -359,33 +308,33 @@ struct ContentView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 2)
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
 
-            // 6 个格子与冒号
+            // 6 个只读数字卡片与冒号
             VStack(spacing: 10) {
                 HStack(alignment: .center, spacing: 10) {
                     // 时 (2位)
                     HStack(spacing: 6) {
-                        makeDigitView(index: 0)
-                        makeDigitView(index: 1)
+                        makeReadOnlyDigitView(index: 0)
+                        makeReadOnlyDigitView(index: 1)
                     }
 
                     colonView
 
                     // 分 (2位)
                     HStack(spacing: 6) {
-                        makeDigitView(index: 2)
-                        makeDigitView(index: 3)
+                        makeReadOnlyDigitView(index: 2)
+                        makeReadOnlyDigitView(index: 3)
                     }
 
                     colonView
 
                     // 秒 (2位)
                     HStack(spacing: 6) {
-                        makeDigitView(index: 4)
-                        makeDigitView(index: 5)
+                        makeReadOnlyDigitView(index: 4)
+                        makeReadOnlyDigitView(index: 5)
                     }
                 }
 
@@ -414,11 +363,10 @@ struct ContentView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
 
-            // 控制按钮区域
+            // 控制按钮区域（开始/暂停/继续、重置、编辑）
             HStack(spacing: 12) {
                 // 开始 / 暂停 / 继续
                 Button(action: {
-                    focusedIndex = nil
                     viewModel.toggleStartPause()
                 }) {
                     Text(startPauseTitle)
@@ -433,12 +381,11 @@ struct ContentView: View {
 
                 // 重置
                 Button(action: {
-                    focusedIndex = nil
                     viewModel.reset()
                 }) {
                     Text("重置")
                         .font(.system(size: 14, weight: .medium))
-                        .frame(minWidth: 72, minHeight: 34)
+                        .frame(minWidth: 76, minHeight: 34)
                         .background(Color(nsColor: .controlBackgroundColor))
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
@@ -450,13 +397,13 @@ struct ContentView: View {
                 .disabled(viewModel.state == .idle && viewModel.remainingSeconds == viewModel.initialTotalSeconds)
                 .opacity((viewModel.state == .idle && viewModel.remainingSeconds == viewModel.initialTotalSeconds) ? 0.4 : 1.0)
 
-                // 重命名当前选中的倒计时
+                // 编辑当前选中的倒计时
                 Button(action: {
-                    beginRename(presetID: selectedPresetID)
+                    beginEdit(presetID: selectedPresetID)
                 }) {
-                    Text("重命名")
+                    Text("编辑")
                         .font(.system(size: 14, weight: .medium))
-                        .frame(minWidth: 72, minHeight: 34)
+                        .frame(minWidth: 76, minHeight: 34)
                         .background(Color(nsColor: .controlBackgroundColor))
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
@@ -465,25 +412,6 @@ struct ContentView: View {
                         .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
-
-                // 归零（将所有数字重置为 00:00:00）
-                Button(action: {
-                    focusedIndex = nil
-                    viewModel.clearAll()
-                }) {
-                    Text("归零")
-                        .font(.system(size: 14, weight: .medium))
-                        .frame(minWidth: 72, minHeight: 34)
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                        )
-                        .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-                .disabled(!isEditable || viewModel.calculatedSecondsFromDigits == 0)
-                .opacity((!isEditable || viewModel.calculatedSecondsFromDigits == 0) ? 0.4 : 1.0)
             }
 
             Spacer(minLength: 0)
@@ -491,23 +419,6 @@ struct ContentView: View {
         .padding(24)
         .frame(minWidth: 420, minHeight: 250)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            DigitFocusResponderView(
-                isActive: isDigitFocusActive,
-                focusRequestToken: focusRequestToken,
-                onKeyDown: { event in
-                    handleDigitKeyDown(event)
-                },
-                onClickOutside: {
-                    focusedIndex = nil
-                }
-            )
-        )
-        // 点击空白处取消格子焦点
-        .contentShape(Rectangle())
-        .onTapGesture {
-            focusedIndex = nil
-        }
     }
 
     private var colonView: some View {
@@ -522,115 +433,15 @@ struct ContentView: View {
         .frame(width: 14)
     }
 
-    private func selectDigit(_ index: Int) {
-        guard isEditable else { return }
-        focusedIndex = index
-        focusRequestToken &+= 1
-    }
-
     @ViewBuilder
-    private func makeDigitView(index: Int) -> some View {
+    private func makeReadOnlyDigitView(index: Int) -> some View {
         DigitBoxView(
             index: index,
             value: viewModel.digits[index],
             isEditable: isEditable,
-            isFocused: focusedIndex == index,
-            onSelect: {
-                selectDigit(index)
-            },
-            onIncrement: {
-                selectDigit(index)
-                viewModel.adjustDigit(at: index, delta: 1)
-            },
-            onDecrement: {
-                selectDigit(index)
-                viewModel.adjustDigit(at: index, delta: -1)
-            }
+            isInteractive: false,
+            isFocused: false
         )
-    }
-
-    private func handleDigitKeyDown(_ event: NSEvent) -> Bool {
-        guard isDigitFocusActive, let index = focusedIndex else { return false }
-
-        // 数字键输入 0-9（兼容主键盘与小键盘）
-        if let chars = event.charactersIgnoringModifiers,
-           chars.count == 1,
-           let char = chars.first,
-           let num = char.wholeNumberValue,
-           (0...9).contains(num) {
-            viewModel.setDigit(at: index, value: num)
-            if index < 5 {
-                focusedIndex = index + 1
-                focusRequestToken &+= 1
-            } else {
-                focusedIndex = nil
-            }
-            return true
-        }
-
-        switch event.keyCode {
-        case 51, 117: // Delete (Backspace) / Forward Delete
-            if viewModel.digits[index] != 0 {
-                viewModel.setDigit(at: index, value: 0)
-            } else if index > 0 {
-                focusedIndex = index - 1
-                focusRequestToken &+= 1
-                viewModel.setDigit(at: index - 1, value: 0)
-            }
-            return true
-
-        case 123: // Left Arrow
-            if index > 0 {
-                focusedIndex = index - 1
-                focusRequestToken &+= 1
-            }
-            return true
-
-        case 124: // Right Arrow
-            if index < 5 {
-                focusedIndex = index + 1
-                focusRequestToken &+= 1
-            }
-            return true
-
-        case 126: // Up Arrow
-            viewModel.adjustDigit(at: index, delta: 1)
-            return true
-
-        case 125: // Down Arrow
-            viewModel.adjustDigit(at: index, delta: -1)
-            return true
-
-        case 48: // Tab
-            if event.modifierFlags.contains(.shift) {
-                if index > 0 {
-                    focusedIndex = index - 1
-                    focusRequestToken &+= 1
-                } else {
-                    focusedIndex = nil
-                }
-            } else {
-                if index < 5 {
-                    focusedIndex = index + 1
-                    focusRequestToken &+= 1
-                } else {
-                    focusedIndex = nil
-                }
-            }
-            return true
-
-        case 53: // Escape
-            focusedIndex = nil
-            return true
-
-        case 36, 76: // Return / Keypad Enter
-            focusedIndex = nil
-            viewModel.toggleStartPause()
-            return true
-
-        default:
-            return false
-        }
     }
 
     private var startPauseTitle: String {
@@ -653,140 +464,5 @@ struct ContentView: View {
         case .idle, .finished:
             return Color.accentColor
         }
-    }
-}
-
-/// 负责在倒计时详情区接管 AppKit FirstResponder 并监听数字格键盘/外部点击事件，
-/// 彻底避免 NavigationSplitView 侧边栏 NSTableView 抢夺焦点或导致聚焦状态丢失。
-private struct DigitFocusResponderView: NSViewRepresentable {
-    let isActive: Bool
-    let focusRequestToken: Int
-    let onKeyDown: (NSEvent) -> Bool
-    let onClickOutside: () -> Void
-
-    func makeNSView(context: Context) -> KeyResponderNSView {
-        let view = KeyResponderNSView()
-        view.onKeyDown = onKeyDown
-        view.onClickOutside = onClickOutside
-        return view
-    }
-
-    func updateNSView(_ nsView: KeyResponderNSView, context: Context) {
-        nsView.onKeyDown = onKeyDown
-        nsView.onClickOutside = onClickOutside
-        nsView.isActive = isActive
-
-        if isActive {
-            DispatchQueue.main.async { [weak nsView] in
-                guard let nsView = nsView,
-                      nsView.isActive,
-                      let window = nsView.window,
-                      window.attachedSheet == nil,
-                      !(window.firstResponder is NSText) else { return }
-                if window.firstResponder !== nsView {
-                    window.makeFirstResponder(nsView)
-                }
-            }
-        } else {
-            DispatchQueue.main.async { [weak nsView] in
-                guard let nsView = nsView,
-                      !nsView.isActive,
-                      let window = nsView.window else { return }
-                if window.firstResponder === nsView {
-                    window.makeFirstResponder(nil)
-                }
-            }
-        }
-    }
-}
-
-private final class KeyResponderNSView: NSView {
-    var isActive: Bool = false
-    var onKeyDown: ((NSEvent) -> Bool)?
-    var onClickOutside: (() -> Void)?
-
-    private var keyMonitor: Any?
-    private var mouseMonitor: Any?
-    private var lastHandledEventTimestamp: TimeInterval?
-
-    override var acceptsFirstResponder: Bool {
-        true
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        nil
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        removeMonitors()
-        guard window != nil else { return }
-
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self,
-                  self.isActive,
-                  let window = self.window,
-                  window.isKeyWindow,
-                  window.attachedSheet == nil,
-                  !(window.firstResponder is NSText) else {
-                return event
-            }
-            // 不拦截带 Command / Control / Option 修饰键的系统快捷键
-            guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else {
-                return event
-            }
-            if window.firstResponder !== self {
-                window.makeFirstResponder(self)
-            }
-            if self.onKeyDown?(event) == true {
-                self.lastHandledEventTimestamp = event.timestamp
-                return nil
-            }
-            return event
-        }
-
-        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            guard let self = self,
-                  self.isActive,
-                  let window = self.window,
-                  event.window === window else {
-                return event
-            }
-            let localPoint = self.convert(event.locationInWindow, from: nil)
-            if !self.bounds.contains(localPoint) {
-                DispatchQueue.main.async { [weak self] in
-                    self?.onClickOutside?()
-                }
-            }
-            return event
-        }
-    }
-
-    override func keyDown(with event: NSEvent) {
-        if lastHandledEventTimestamp == event.timestamp {
-            return
-        }
-        if isActive,
-           event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
-           onKeyDown?(event) == true {
-            lastHandledEventTimestamp = event.timestamp
-            return
-        }
-        super.keyDown(with: event)
-    }
-
-    private func removeMonitors() {
-        if let keyMonitor {
-            NSEvent.removeMonitor(keyMonitor)
-            self.keyMonitor = nil
-        }
-        if let mouseMonitor {
-            NSEvent.removeMonitor(mouseMonitor)
-            self.mouseMonitor = nil
-        }
-    }
-
-    deinit {
-        removeMonitors()
     }
 }
