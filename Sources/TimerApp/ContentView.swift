@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     private enum PendingInterruptAction {
@@ -8,7 +9,10 @@ struct ContentView: View {
 
     @StateObject private var viewModel = TimerViewModel()
     @StateObject private var presetStore = PresetStore()
-    @FocusState private var focusedIndex: Int?
+
+    // 当前聚焦的数字格索引（0~5），使用 @State 避免 NavigationSplitView 侧边栏刷新时丢失 @FocusState
+    @State private var focusedIndex: Int?
+    @State private var focusRequestToken: Int = 0
 
     // 重命名弹窗
     @State private var isRenamePresented = false
@@ -22,6 +26,10 @@ struct ContentView: View {
 
     var isEditable: Bool {
         viewModel.state == .idle || viewModel.state == .finished
+    }
+
+    private var isDigitFocusActive: Bool {
+        focusedIndex != nil && isEditable && !isRenamePresented && !isInterruptConfirmPresented
     }
 
     private var selectedPreset: TimerPreset? {
@@ -75,6 +83,11 @@ struct ContentView: View {
                 presetStore.updateDuration(id: id, totalSeconds: newSeconds)
             }
         }
+        .onChange(of: isEditable) { _, editable in
+            if !editable {
+                focusedIndex = nil
+            }
+        }
         .alert("重命名倒计时", isPresented: $isRenamePresented) {
             TextField("输入倒计时名称", text: $tempTitle)
             Button("确定") {
@@ -120,6 +133,7 @@ struct ContentView: View {
             sidebarHeader
         }
         .onDeleteCommand {
+            guard focusedIndex == nil else { return }
             if let id = selectedPresetID {
                 deletePreset(id: id)
             }
@@ -193,9 +207,9 @@ struct ContentView: View {
     }
 
     private func handleUserSelection(_ newID: UUID?) {
+        focusedIndex = nil
         guard let newID, newID != selectedPresetID,
               let preset = presetStore.preset(id: newID) else { return }
-        focusedIndex = nil
 
         if viewModel.state == .running || viewModel.state == .paused {
             pendingInterruptAction = .select(preset)
@@ -477,6 +491,18 @@ struct ContentView: View {
         .padding(24)
         .frame(minWidth: 420, minHeight: 250)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            DigitFocusResponderView(
+                isActive: isDigitFocusActive,
+                focusRequestToken: focusRequestToken,
+                onKeyDown: { event in
+                    handleDigitKeyDown(event)
+                },
+                onClickOutside: {
+                    focusedIndex = nil
+                }
+            )
+        )
         // 点击空白处取消格子焦点
         .contentShape(Rectangle())
         .onTapGesture {
@@ -496,6 +522,12 @@ struct ContentView: View {
         .frame(width: 14)
     }
 
+    private func selectDigit(_ index: Int) {
+        guard isEditable else { return }
+        focusedIndex = index
+        focusRequestToken &+= 1
+    }
+
     @ViewBuilder
     private func makeDigitView(index: Int) -> some View {
         DigitBoxView(
@@ -504,70 +536,101 @@ struct ContentView: View {
             isEditable: isEditable,
             isFocused: focusedIndex == index,
             onSelect: {
-                focusedIndex = index
+                selectDigit(index)
             },
             onIncrement: {
+                selectDigit(index)
                 viewModel.adjustDigit(at: index, delta: 1)
             },
             onDecrement: {
+                selectDigit(index)
                 viewModel.adjustDigit(at: index, delta: -1)
             }
         )
-        .focusable(isEditable)
-        .focusEffectDisabled()
-        .focused($focusedIndex, equals: index)
-        .onKeyPress { press in
-            guard isEditable else { return .ignored }
-            return handleKeyPress(press, at: index)
-        }
     }
 
-    private func handleKeyPress(_ press: KeyPress, at index: Int) -> KeyPress.Result {
-        // 数字键输入 0-9
-        if let char = press.characters.first, let num = Int(String(char)) {
+    private func handleDigitKeyDown(_ event: NSEvent) -> Bool {
+        guard isDigitFocusActive, let index = focusedIndex else { return false }
+
+        // 数字键输入 0-9（兼容主键盘与小键盘）
+        if let chars = event.charactersIgnoringModifiers,
+           chars.count == 1,
+           let char = chars.first,
+           let num = char.wholeNumberValue,
+           (0...9).contains(num) {
             viewModel.setDigit(at: index, value: num)
             if index < 5 {
                 focusedIndex = index + 1
+                focusRequestToken &+= 1
             } else {
                 focusedIndex = nil
             }
-            return .handled
+            return true
         }
 
-        // 删除键 Backspace / Delete
-        if press.key == .delete {
+        switch event.keyCode {
+        case 51, 117: // Delete (Backspace) / Forward Delete
             if viewModel.digits[index] != 0 {
                 viewModel.setDigit(at: index, value: 0)
             } else if index > 0 {
                 focusedIndex = index - 1
+                focusRequestToken &+= 1
                 viewModel.setDigit(at: index - 1, value: 0)
             }
-            return .handled
-        }
+            return true
 
-        // 左右箭头切换焦点
-        if press.key == .leftArrow {
+        case 123: // Left Arrow
             if index > 0 {
                 focusedIndex = index - 1
-                return .handled
+                focusRequestToken &+= 1
             }
-        } else if press.key == .rightArrow {
+            return true
+
+        case 124: // Right Arrow
             if index < 5 {
                 focusedIndex = index + 1
-                return .handled
+                focusRequestToken &+= 1
             }
-        }
+            return true
 
-        // 上下箭头增减数值
-        if press.key == .upArrow {
+        case 126: // Up Arrow
             viewModel.adjustDigit(at: index, delta: 1)
-            return .handled
-        } else if press.key == .downArrow {
-            viewModel.adjustDigit(at: index, delta: -1)
-            return .handled
-        }
+            return true
 
-        return .ignored
+        case 125: // Down Arrow
+            viewModel.adjustDigit(at: index, delta: -1)
+            return true
+
+        case 48: // Tab
+            if event.modifierFlags.contains(.shift) {
+                if index > 0 {
+                    focusedIndex = index - 1
+                    focusRequestToken &+= 1
+                } else {
+                    focusedIndex = nil
+                }
+            } else {
+                if index < 5 {
+                    focusedIndex = index + 1
+                    focusRequestToken &+= 1
+                } else {
+                    focusedIndex = nil
+                }
+            }
+            return true
+
+        case 53: // Escape
+            focusedIndex = nil
+            return true
+
+        case 36, 76: // Return / Keypad Enter
+            focusedIndex = nil
+            viewModel.toggleStartPause()
+            return true
+
+        default:
+            return false
+        }
     }
 
     private var startPauseTitle: String {
@@ -590,5 +653,140 @@ struct ContentView: View {
         case .idle, .finished:
             return Color.accentColor
         }
+    }
+}
+
+/// 负责在倒计时详情区接管 AppKit FirstResponder 并监听数字格键盘/外部点击事件，
+/// 彻底避免 NavigationSplitView 侧边栏 NSTableView 抢夺焦点或导致聚焦状态丢失。
+private struct DigitFocusResponderView: NSViewRepresentable {
+    let isActive: Bool
+    let focusRequestToken: Int
+    let onKeyDown: (NSEvent) -> Bool
+    let onClickOutside: () -> Void
+
+    func makeNSView(context: Context) -> KeyResponderNSView {
+        let view = KeyResponderNSView()
+        view.onKeyDown = onKeyDown
+        view.onClickOutside = onClickOutside
+        return view
+    }
+
+    func updateNSView(_ nsView: KeyResponderNSView, context: Context) {
+        nsView.onKeyDown = onKeyDown
+        nsView.onClickOutside = onClickOutside
+        nsView.isActive = isActive
+
+        if isActive {
+            DispatchQueue.main.async { [weak nsView] in
+                guard let nsView = nsView,
+                      nsView.isActive,
+                      let window = nsView.window,
+                      window.attachedSheet == nil,
+                      !(window.firstResponder is NSText) else { return }
+                if window.firstResponder !== nsView {
+                    window.makeFirstResponder(nsView)
+                }
+            }
+        } else {
+            DispatchQueue.main.async { [weak nsView] in
+                guard let nsView = nsView,
+                      !nsView.isActive,
+                      let window = nsView.window else { return }
+                if window.firstResponder === nsView {
+                    window.makeFirstResponder(nil)
+                }
+            }
+        }
+    }
+}
+
+private final class KeyResponderNSView: NSView {
+    var isActive: Bool = false
+    var onKeyDown: ((NSEvent) -> Bool)?
+    var onClickOutside: (() -> Void)?
+
+    private var keyMonitor: Any?
+    private var mouseMonitor: Any?
+    private var lastHandledEventTimestamp: TimeInterval?
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        removeMonitors()
+        guard window != nil else { return }
+
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self,
+                  self.isActive,
+                  let window = self.window,
+                  window.isKeyWindow,
+                  window.attachedSheet == nil,
+                  !(window.firstResponder is NSText) else {
+                return event
+            }
+            // 不拦截带 Command / Control / Option 修饰键的系统快捷键
+            guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else {
+                return event
+            }
+            if window.firstResponder !== self {
+                window.makeFirstResponder(self)
+            }
+            if self.onKeyDown?(event) == true {
+                self.lastHandledEventTimestamp = event.timestamp
+                return nil
+            }
+            return event
+        }
+
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self = self,
+                  self.isActive,
+                  let window = self.window,
+                  event.window === window else {
+                return event
+            }
+            let localPoint = self.convert(event.locationInWindow, from: nil)
+            if !self.bounds.contains(localPoint) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onClickOutside?()
+                }
+            }
+            return event
+        }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if lastHandledEventTimestamp == event.timestamp {
+            return
+        }
+        if isActive,
+           event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+           onKeyDown?(event) == true {
+            lastHandledEventTimestamp = event.timestamp
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    private func removeMonitors() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
+        if let mouseMonitor {
+            NSEvent.removeMonitor(mouseMonitor)
+            self.mouseMonitor = nil
+        }
+    }
+
+    deinit {
+        removeMonitors()
     }
 }
