@@ -8,3 +8,6 @@
   - 暂存所有必要的新增与变更文件（遵循 `.gitignore`）。
   - 使用规范的 Conventional Commits 格式撰写清晰明了的 Commit Message（如 `feat:`, `fix:`, `refactor:`, `style:` 等）。
   - 确认提交状态干净（working tree clean）。
+
+### 2. UI 检查与验证规范 (UI Verification)
+- **要求**：任务完成之后由用户手动检查，除非特别要求，否则不要直接截图来看 UI 实现效果。
