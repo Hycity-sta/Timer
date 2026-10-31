@@ -76,14 +76,31 @@ final class TimerViewModel: ObservableObject {
         setDigit(at: index, value: next)
     }
 
-    /// 开始或暂停
+    /// 开始、暂停或重新开始
     func toggleStartPause() {
         switch state {
-        case .idle, .finished:
-            let total = calculatedSecondsFromDigits
-            if total > 0 {
-                initialTotalSeconds = total
-                remainingSeconds = total
+        case .idle:
+            if remainingSeconds > 0 {
+                startTimer()
+            } else if initialTotalSeconds > 0 {
+                remainingSeconds = initialTotalSeconds
+                syncDigitsFromRemainingSeconds()
+                startTimer()
+            } else {
+                let total = calculatedSecondsFromDigits
+                if total > 0 {
+                    initialTotalSeconds = total
+                    remainingSeconds = total
+                    startTimer()
+                } else {
+                    NSSound.beep()
+                }
+            }
+        case .finished:
+            // 倒计时结束时，从设定的初始时长重新开始计时
+            if initialTotalSeconds > 0 {
+                remainingSeconds = initialTotalSeconds
+                syncDigitsFromRemainingSeconds()
                 startTimer()
             } else {
                 NSSound.beep()

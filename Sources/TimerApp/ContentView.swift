@@ -398,7 +398,7 @@ struct ContentView: View {
 
             // 控制按钮区域（开始/暂停/继续、重置、编辑）
             HStack(spacing: 12) {
-                // 开始 / 暂停 / 继续
+                // 开始 / 暂停 / 继续 / 重新开始
                 Button(action: {
                     viewModel.toggleStartPause()
                 }) {
@@ -411,6 +411,8 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.defaultAction)
+                .disabled(viewModel.initialTotalSeconds == 0)
+                .opacity(viewModel.initialTotalSeconds == 0 ? 0.4 : 1.0)
 
                 // 重置
                 Button(action: {
@@ -486,7 +488,9 @@ struct ContentView: View {
             return "暂停"
         case .paused:
             return "继续"
-        case .idle, .finished:
+        case .finished:
+            return "重新开始"
+        case .idle:
             return "开始"
         }
     }
