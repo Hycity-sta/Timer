@@ -345,18 +345,6 @@ struct ContentView: View {
         VStack(spacing: 18) {
             Spacer(minLength: 0)
 
-            // 倒计时标题（有标题时居中展示）
-            if !viewModel.trimmedTitle.isEmpty {
-                Text(viewModel.trimmedTitle)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 2)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            }
-
             // 6 个纯净只读数字显示与冒号
             VStack(spacing: 10) {
                 HStack(alignment: .center, spacing: 10) {
