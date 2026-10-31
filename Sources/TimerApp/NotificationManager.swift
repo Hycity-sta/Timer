@@ -74,6 +74,11 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     private func postNotification(title: String) {
         let center = UNUserNotificationCenter.current()
 
+        // 触发程序坞图标持续跳动提醒，直至用户激活应用
+        DispatchQueue.main.async {
+            NSApp.requestUserAttention(.criticalRequest)
+        }
+
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = "时间到了！点击返回应用"
