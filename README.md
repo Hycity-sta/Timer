@@ -30,11 +30,11 @@
 ./build_app.sh release
 open /Applications/Timer.app
 
-# 构建并安装 Debug 版本 (输出 dist/Timer-Debug.app 并安装到 /Applications/Timer-Debug.app，数据与 Release 完全隔离)
+# 构建 Debug 版本 (输出 dist/Timer-Debug.app 供本地调试测试，不安装到 /Applications，数据与 Release 完全隔离)
 ./build_app.sh debug
-open /Applications/Timer-Debug.app
+open dist/Timer-Debug.app
 
-# 同时构建并安装 Release 与 Debug 版本
+# 同时构建 Release（自动安装）与 Debug 版本（保留在 dist/）
 ./build_app.sh all
 ```
 

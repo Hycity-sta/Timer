@@ -99,27 +99,29 @@ build_target() {
 
     echo "✓ 成功构建并打包: $APP_DIR (显示名称: $LOCALIZED_NAME)"
 
-    # 安装到 /Applications 目录
-    INSTALL_DIR="/Applications"
-    INSTALL_APP="$INSTALL_DIR/$BASE_NAME.app"
-    if [ -d "$INSTALL_DIR" ] && [ -w "$INSTALL_DIR" ]; then
-        # 清理旧版本中文名残留（防止 LaunchServices 混淆）
-        for old_app in "$INSTALL_DIR/倒计时.app" "$INSTALL_DIR/倒计时 (Debug).app"; do
-            if [ -d "$old_app" ]; then
-                if [ -x "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" ]; then
-                    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$old_app" 2>/dev/null || true
+    # 仅 Release 版本自动安装到 /Applications 目录
+    if [ "$MODE" = "release" ]; then
+        INSTALL_DIR="/Applications"
+        INSTALL_APP="$INSTALL_DIR/$BASE_NAME.app"
+        if [ -d "$INSTALL_DIR" ] && [ -w "$INSTALL_DIR" ]; then
+            # 清理旧版本中文名及 Debug 残留（防止 LaunchServices 混淆）
+            for old_app in "$INSTALL_DIR/倒计时.app" "$INSTALL_DIR/倒计时 (Debug).app" "$INSTALL_DIR/Timer-Debug.app"; do
+                if [ -d "$old_app" ]; then
+                    if [ -x "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" ]; then
+                        /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$old_app" 2>/dev/null || true
+                    fi
+                    rm -rf "$old_app"
                 fi
-                rm -rf "$old_app"
-            fi
-        done
+            done
 
-        echo "正在安装到 $INSTALL_APP ..."
-        rm -rf "$INSTALL_APP"
-        cp -R "$APP_DIR" "$INSTALL_APP"
-        if [ -x "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" ]; then
-            /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$INSTALL_APP" || true
+            echo "正在安装到 $INSTALL_APP ..."
+            rm -rf "$INSTALL_APP"
+            cp -R "$APP_DIR" "$INSTALL_APP"
+            if [ -x "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" ]; then
+                /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$INSTALL_APP" || true
+            fi
+            echo "✓ 成功安装到 $INSTALL_APP (显示名称: $LOCALIZED_NAME)"
         fi
-        echo "✓ 成功安装到 $INSTALL_APP (显示名称: $LOCALIZED_NAME)"
     fi
     echo ""
 }
