@@ -46,15 +46,6 @@ struct ContentView: View {
         return title.isEmpty ? selectedPreset.displayName : title
     }
 
-    private var finishedMessage: String {
-        let title = viewModel.trimmedTitle
-        if title.isEmpty {
-            return "⏰ 时间到！"
-        } else {
-            return "⏰ [\(title)] 时间到！"
-        }
-    }
-
     var body: some View {
         NavigationSplitView {
             sidebar
@@ -384,16 +375,6 @@ struct ContentView: View {
                 }
                 .font(.system(size: 12, weight: .regular))
                 .foregroundColor(.secondary)
-            }
-
-            // 倒计时完成提示
-            if viewModel.state == .finished {
-                Text(finishedMessage)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.red)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
 
             // 控制按钮区域（开始/暂停/继续、重置、编辑）

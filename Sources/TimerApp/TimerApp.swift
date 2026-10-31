@@ -4,6 +4,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        NotificationManager.shared.setup()
         setupAppIcon()
         NSApp.activate(ignoringOtherApps: true)
     }

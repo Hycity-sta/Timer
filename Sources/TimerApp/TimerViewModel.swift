@@ -152,7 +152,7 @@ final class TimerViewModel: ObservableObject {
         timerCancellable?.cancel()
         timerCancellable = nil
         syncDigitsFromRemainingSeconds()
-        NSSound.beep()
+        NotificationManager.shared.sendTimerFinishedNotification(timerTitle: trimmedTitle)
     }
 
     /// 重置

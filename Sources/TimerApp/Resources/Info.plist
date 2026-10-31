@@ -33,6 +33,8 @@
     <string>27.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSUserNotificationAlertStyle</key>
+    <string>alert</string>
     <key>NSRequiresAquaSystemAppearance</key>
     <false/>
 </dict>
