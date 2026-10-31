@@ -89,6 +89,9 @@ build_target() {
         fi
     fi
 
+    # 执行 Ad-hoc 代码签名，绑定并封装 App Bundle（确保 UNUserNotificationCenter 及系统权限服务正常识别）
+    codesign --force --deep --sign - "$APP_DIR"
+
     # 强制刷新系统 LaunchServices 注册信息
     if [ -x "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" ]; then
         /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_DIR" || true

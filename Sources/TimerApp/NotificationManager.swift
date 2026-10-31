@@ -1,6 +1,7 @@
 import Foundation
 import UserNotifications
 import AppKit
+import os.log
 
 final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationManager()
@@ -8,11 +9,13 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     static let categoryIdentifier = "TIMER_FINISHED_CATEGORY"
     static let openActionIdentifier = "TIMER_OPEN_ACTION"
 
+    private let logger = Logger(subsystem: "com.hycity.timer", category: "NotificationManager")
+
     private override init() {
         super.init()
     }
 
-    /// 初始化并请求系统通知权限
+    /// 初始化通知中心与分类
     func setup() {
         let center = UNUserNotificationCenter.current()
         center.delegate = self
@@ -20,7 +23,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         // 注册交互动作（打开应用）与分类
         let openAction = UNNotificationAction(
             identifier: Self.openActionIdentifier,
-            title: "打开",
+            title: "打开应用",
             options: [.foreground]
         )
         let category = UNNotificationCategory(
@@ -31,45 +34,67 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         )
         center.setNotificationCategories([category])
 
-        // 请求系统横幅通知权限（无需提示音权限）
-        center.requestAuthorization(options: [.alert, .badge]) { granted, error in
+        // 请求系统通知权限（请求 alert 和 sound 权限以便系统建立完整的通知项）
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { [weak self] granted, error in
             if let error = error {
-                NSLog("通知权限申请失败: %@", error.localizedDescription)
+                self?.logger.error("通知权限请求错误: \(error.localizedDescription, privacy: .public)")
+            } else {
+                self?.logger.info("通知权限状态: granted=\(granted, privacy: .public)")
             }
         }
     }
 
-    /// 发送倒计时结束长通知（需用户手动操作/点击）
+    /// 发送倒计时结束通知
     func sendTimerFinishedNotification(timerTitle: String) {
+        let center = UNUserNotificationCenter.current()
+        let cleanTitle = timerTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let titleToDisplay = cleanTitle.isEmpty ? "倒计时" : cleanTitle
+
+        center.getNotificationSettings { [weak self] settings in
+            guard let self = self else { return }
+            switch settings.authorizationStatus {
+            case .authorized, .provisional:
+                self.postNotification(title: titleToDisplay)
+            case .notDetermined:
+                center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+                    if granted {
+                        self.postNotification(title: titleToDisplay)
+                    } else if let error = error {
+                        self.logger.error("请求通知权限失败: \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+            case .denied:
+                self.logger.warning("通知权限已被用户拒绝，请在「系统设置 > 通知」中为本应用开启通知")
+            @unknown default:
+                self.postNotification(title: titleToDisplay)
+            }
+        }
+    }
+
+    private func postNotification(title: String) {
         let center = UNUserNotificationCenter.current()
 
         let content = UNMutableNotificationContent()
-        let cleanTitle = timerTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        if cleanTitle.isEmpty {
-            content.title = "倒计时"
-            content.body = "时间到了！点击返回应用"
-        } else {
-            content.title = cleanTitle
-            content.body = "时间到了！点击返回应用"
-        }
-
+        content.title = title
+        content.body = "时间到了！点击返回应用"
         content.categoryIdentifier = Self.categoryIdentifier
-        // 设为时间敏感通知，提高系统展示优先级并常驻提醒
-        content.interruptionLevel = .timeSensitive
+        // 使用 active 中断等级，保证本地编译免签名证书时亦可正常投递
+        content.interruptionLevel = .active
         // 按用户要求：不附带声音提示
         content.sound = nil
 
-        // 立即触发通知
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        // trigger 为 nil 表示立即发送
         let request = UNNotificationRequest(
             identifier: "timer_finished_\(UUID().uuidString)",
             content: content,
-            trigger: trigger
+            trigger: nil
         )
 
-        center.add(request) { error in
+        center.add(request) { [weak self] error in
             if let error = error {
-                NSLog("发送通知失败: %@", error.localizedDescription)
+                self?.logger.error("添加通知请求失败: \(error.localizedDescription, privacy: .public)")
+            } else {
+                self?.logger.info("成功添加倒计时结束通知")
             }
         }
     }
@@ -85,7 +110,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         completionHandler([.banner, .list])
     }
 
-    /// 用户手动点击通知或点击“打开”操作时，激活应用并前置窗口
+    /// 用户手动点击通知或点击“打开应用”操作时，激活应用并前置窗口
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
