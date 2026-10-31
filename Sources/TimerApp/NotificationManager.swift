@@ -81,7 +81,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
         let content = UNMutableNotificationContent()
         content.title = title
-        content.body = "时间到了！点击返回应用"
+        content.body = "倒计时结束！"
         content.categoryIdentifier = Self.categoryIdentifier
         // 使用 active 中断等级，保证本地编译免签名证书时亦可正常投递
         content.interruptionLevel = .active
